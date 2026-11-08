@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import MobileNavigation from "./mobile-navigation";
 import { Form } from "./form";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -503,8 +504,19 @@ export default function Platform() {
       </>
     );
   }
+  const parentNavigation =
+    !isProvider &&
+    !isAdmin &&
+    profile?.role !== "provider" &&
+    profile?.role !== "admin" &&
+    path !== "/sign-in" &&
+    path !== "/reset-password";
   return (
-    <>
+    <div
+      className={
+        parentNavigation ? "app-shell with-parent-navigation" : "app-shell"
+      }
+    >
       <header className="topbar">
         <Link href="/" className="brand">
           360
@@ -512,12 +524,21 @@ export default function Platform() {
             Kids Activity<span className="brand-dot">●</span>
           </span>
         </Link>
-        <nav>
+        <nav className="desktop-navigation" aria-label="Main navigation">
           <Link href="/activities">Explore activities</Link>
           <Link href="/about">Our story</Link>
           <Link href="/become-a-provider">For providers</Link>
         </nav>
-        <div className="actions">
+        <details className="compact-navigation" key={path}>
+          <summary>Menu</summary>
+          <nav aria-label="More navigation">
+            <Link href="/activities">Explore activities</Link>
+            <Link href="/about">Our story</Link>
+            <Link href="/become-a-provider">For providers</Link>
+            <Link href="/contact">Contact</Link>
+          </nav>
+        </details>
+        <div className="actions header-actions">
           <Link
             href={profile ? "/account" : "/sign-in"}
             className="button secondary"
@@ -593,7 +614,11 @@ export default function Platform() {
         </div>
       )}
       <main
-        className={isAccount || isProvider || isAdmin ? "workspace" : "content"}
+        className={
+          isAccount || isProvider || isAdmin
+            ? `workspace ${isAccount ? "family-workspace" : ""}`
+            : "content"
+        }
       >
         {(isAccount || isProvider || isAdmin) && (
           <aside>
@@ -1412,7 +1437,8 @@ export default function Platform() {
         </div>
         <small>All booking deadlines are shown in Dubai time.</small>
       </footer>
-    </>
+      {parentNavigation && <MobileNavigation path={path} />}
+    </div>
   );
 }
 function Empty({
