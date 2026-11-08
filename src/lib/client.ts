@@ -3,6 +3,15 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL,
   key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 export const auth = url && key ? createClient(url, key) : null;
 export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 export async function api<T>(path: string, body?: unknown): Promise<T> {
   const token = auth
     ? (await auth.auth.getSession()).data.session?.access_token
@@ -23,7 +32,10 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   });
   const data = await response.json();
   if (!response.ok)
-    throw new Error(data.message || "Unable to complete this request.");
+    throw new ApiError(
+      data.message || "Unable to complete this request.",
+      response.status,
+    );
   return data as T;
 }
 export interface Profile {

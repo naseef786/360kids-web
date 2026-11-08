@@ -247,7 +247,9 @@ export function BaseFeatures({
   path,
   profile,
   refresh,
+  syncVersion = 0,
 }: {
+  syncVersion?: number;
   path: string;
   profile: Profile;
   refresh: () => Promise<void>;
@@ -261,14 +263,17 @@ export function BaseFeatures({
     content = path === "/admin/content",
     corrections =
       path === "/admin/corrections" || path === "/provider/activities";
-  const tickets = useResource<Ticket[]>(support ? "/support" : null, revision),
+  const tickets = useResource<Ticket[]>(
+      support ? "/support" : null,
+      revision + syncVersion,
+    ),
     pages = useResource<Content[]>(
       content ? "/manage/content" : null,
-      revision,
+      revision + syncVersion,
     ),
     changes = useResource<Correction[]>(
       corrections ? "/corrections" : null,
-      revision,
+      revision + syncVersion,
     );
   const [page, setPage] = useState("about");
   const current = pages.data?.find((p) => p.slug === page);
@@ -581,10 +586,17 @@ export function PublicContent({ slug }: { slug: string }) {
     </section>
   );
 }
-export function BookingHistory({ id }: { id: string }) {
+export function BookingHistory({
+  id,
+  version = 0,
+}: {
+  id: string;
+  version?: number;
+}) {
   const [open, setOpen] = useState(false);
   const { data, error } = useResource<{ action: string; created_at: string }[]>(
     open ? "/bookings/" + id + "/history" : null,
+    version,
   );
   return (
     <details onToggle={(e) => setOpen(e.currentTarget.open)}>

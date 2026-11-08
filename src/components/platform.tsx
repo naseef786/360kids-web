@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
 import MobileNavigation from "./mobile-navigation";
+import RealtimeNotifications from "./realtime-notifications";
 import { Form } from "./form";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  ApiError,
   auth,
   date,
   money,
@@ -62,6 +64,7 @@ export default function Platform() {
     [bookingFilter, setBookingFilter] = useState("all"),
     [category, setCategory] = useState("All activities"),
     [selected, setSelected] = useState<string[]>([]);
+  const [syncVersion, setSyncVersion] = useState(0);
   const load = useCallback(async () => {
     try {
       const catalog = await api<Activity[]>("/activities");
@@ -97,11 +100,24 @@ export default function Platform() {
         setChildren([]);
       }
     } catch (e) {
+      if (e instanceof ApiError && [401, 403].includes(e.status)) {
+        setProfile(null);
+        setChildren([]);
+        setBookings([]);
+        setProviders([]);
+        setManaged([]);
+        setOps(null);
+        setSelected([]);
+      }
       setError(e instanceof Error ? e.message : "Unable to load.");
     } finally {
       setLoading(false);
     }
   }, []);
+  const refreshLive = useCallback(async () => {
+    await load();
+    setSyncVersion((v) => v + 1);
+  }, [load]);
   useEffect(() => {
     if (auth) {
       const subscription = auth.auth.onAuthStateChange((event) => {
@@ -263,7 +279,7 @@ export default function Platform() {
                 Refund {r.status}: {money(r.amount_fils)}
               </p>
             ))}
-            <BookingHistory id={b.id} />
+            <BookingHistory id={b.id} version={b.version} />
             <details>
               <summary>Accepted cancellation terms</summary>
               <p>{b.snapshot.policy}</p>
@@ -557,6 +573,13 @@ export default function Platform() {
           )}
         </div>
       </header>
+      {profile && (
+        <RealtimeNotifications
+          key={profile.id + ":" + profile.role}
+          profile={profile}
+          onRefresh={refreshLive}
+        />
+      )}
       {(isHome || isCatalog) && (
         <section className={"hero " + (isCatalog ? "compact" : "")}>
           <div>
@@ -1111,6 +1134,7 @@ export default function Platform() {
                       <ActivityManager activities={managed} refresh={load} />
                     )}
                     <BaseFeatures
+                      syncVersion={syncVersion}
                       path={path}
                       profile={profile}
                       refresh={load}
