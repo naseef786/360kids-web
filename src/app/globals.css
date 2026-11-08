@@ -831,3 +831,127 @@ footer .actions {
     transition: none !important;
   }
 }
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 14px;
+  align-items: end;
+  margin: 0 0 28px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.filter-grid .text-button {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+.booking-filter {
+  max-width: 300px;
+  margin-bottom: 24px;
+}
+.editor {
+  border-top: 1px solid var(--line);
+  padding: 20px 0;
+}
+.editor > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  min-height: 44px;
+}
+.review-item {
+  border-top: 1px solid var(--line);
+  padding: 24px 0;
+}
+.timeline {
+  list-style: none;
+  padding: 8px 0 8px 20px;
+  border-left: 2px solid #c4d1bd;
+  margin: 20px;
+}
+.timeline li {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+  position: relative;
+}
+.timeline li:before {
+  content: "";
+  position: absolute;
+  left: -26px;
+  top: 4px;
+  background: #7b9169;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.timeline strong {
+  text-transform: capitalize;
+  font-size: 14px;
+}
+.content-copy {
+  white-space: pre-wrap;
+}
+.muted {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.workspace aside {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+}
+.workspace aside > a:hover:not(.active) {
+  background: #e8ecdf;
+}
+.form {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.panel > .form:first-child {
+  border: 0;
+}
+.workspace-title {
+  font-weight: 500;
+}
+.workspace {
+  background: #f7f8f2;
+}
+.workspace .main-panel > .section-heading {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.card .art {
+  background-image: radial-gradient(
+    circle at 70% 25%,
+    #ffffff55 0 20%,
+    transparent 21%
+  );
+}
+@media (max-width: 950px) {
+  .filter-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .filter-grid button {
+    justify-self: start;
+  }
+}
+@media (max-width: 650px) {
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .workspace aside {
+    position: static;
+    height: auto;
+  }
+  .editor > summary {
+    font-size: 13px;
+  }
+  .filter-grid label {
+    font-size: 12px;
+  }
+}

@@ -38,3 +38,11 @@ The catch-all route currently handles application navigation. Unknown paths, SEO
 See `docs/IMPLEMENTATION_STATUS.md`. This is an implemented development increment, not a production-ready complete platform. No browser visual or real-device QA has been performed. Legal/support content is pending client approval, not invented legal text.
 
 All `NEXT_PUBLIC_*` configuration is included in browser bundles. Do not put server keys, database URLs or customer records in these variables or this repository.
+
+## Base platform update
+
+Families can edit their display name, edit/archive eligible children, request an account deletion review, recover/reset a password and open private support requests. Providers can view their unpublished listings and track correction requests. Admins can edit/publish/hide listings, add sessions, complete correction reviews, publish reviewed page text and respond to support tickets. The app supports alternative-session offers with explicit parent approval.
+
+Additional screens: `/account/support`, `/provider/support`, `/admin/support`, `/admin/corrections`, `/admin/content`, `/reset-password`. Configure Supabase recovery redirects before testing account recovery. Full account erasure is a reviewed process and is not automatically executed by a deletion request.
+
+Catalog filtering now includes age, area, maximum price and activity date. These operate on the catalog loaded by the API; server-side pagination and search optimization remain needed for a larger catalog. Run the backend migrations before opening the updated workspaces.

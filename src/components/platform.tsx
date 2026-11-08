@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
+import { Form } from "./form";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   api,
   auth,
@@ -14,6 +15,14 @@ import {
   type Profile,
   type Provider,
 } from "@/lib/client";
+import {
+  BaseFeatures,
+  ChildEditor,
+  ActivityManager,
+  PublicContent,
+  Recovery,
+  BookingHistory,
+} from "./base-features";
 const labels: Record<string, string> = {
   REQUESTED: "Awaiting provider",
   OFFER_PENDING: "Your response needed",
@@ -32,89 +41,6 @@ const categories = [
   "Nature",
   "Music",
 ];
-type Field = {
-  name: string;
-  label: string;
-  type?: string;
-  required?: boolean;
-  placeholder?: string;
-  options?: { value: string; label: string }[];
-};
-function Form({
-  fields,
-  onSubmit,
-  submit = "Save",
-  children,
-}: {
-  fields: Field[];
-  onSubmit: (data: Record<string, string>) => Promise<void>;
-  submit?: string;
-  children?: React.ReactNode;
-}) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [saved, setSaved] = useState(false);
-  async function send(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    setBusy(true);
-    setError("");
-    setSaved(false);
-    try {
-      await onSubmit(
-        Object.fromEntries(new FormData(form)) as Record<string, string>,
-      );
-      setSaved(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to save.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <form onSubmit={send} className="form">
-      {fields.map((f) => (
-        <label key={f.name}>
-          {f.label}
-          {f.type === "textarea" ? (
-            <textarea
-              name={f.name}
-              required={f.required !== false}
-              placeholder={f.placeholder}
-            />
-          ) : f.options ? (
-            <select name={f.name} required={f.required !== false}>
-              {f.options.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              name={f.name}
-              type={f.type || "text"}
-              required={f.required !== false}
-              placeholder={f.placeholder}
-            />
-          )}
-        </label>
-      ))}
-      {children}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-      {saved && (
-        <p role="status" className="success">
-          Saved successfully.
-        </p>
-      )}
-      <button disabled={busy}>{busy ? "Saving…" : submit}</button>
-    </form>
-  );
-}
 export default function Platform() {
   const path = usePathname(),
     router = useRouter();
@@ -126,7 +52,13 @@ export default function Platform() {
     [ops, setOps] = useState<Operations | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
+    [managed, setManaged] = useState<Activity[]>([]),
     [search, setSearch] = useState(""),
+    [age, setAge] = useState(""),
+    [area, setArea] = useState(""),
+    [maxPrice, setMaxPrice] = useState(""),
+    [onDate, setOnDate] = useState(""),
+    [bookingFilter, setBookingFilter] = useState("all"),
     [category, setCategory] = useState("All activities"),
     [selected, setSelected] = useState<string[]>([]);
   const load = useCallback(async () => {
@@ -146,11 +78,13 @@ export default function Platform() {
           me.role === "admin"
             ? await api<Operations>("/admin/operations")
             : null;
+        const listings = await api<Activity[]>("/manage/activities");
         if (
           (await auth.auth.getSession()).data.session?.user.id !==
           session.user.id
         )
           return;
+        setManaged(listings);
         setProfile(me);
         setOps(operations);
         setChildren(kids);
@@ -175,6 +109,7 @@ export default function Platform() {
           setChildren([]);
           setBookings([]);
           setProviders([]);
+          setManaged([]);
           setOps(null);
           setSelected([]);
           setLoading(false);
@@ -220,6 +155,9 @@ export default function Platform() {
         ["WhatsApp contacts", "/admin/contacts"],
         ["Campaigns", "/admin/campaigns"],
         ["Subscriptions", "/admin/subscriptions"],
+        ["Page content", "/admin/content"],
+        ["Support inbox", "/admin/support"],
+        ["Corrections", "/admin/corrections"],
         ["Audit trail", "/admin/audit"],
       ]
     : isProvider
@@ -229,12 +167,14 @@ export default function Platform() {
           ["My activities", "/provider/activities"],
           ["My business", "/provider/profile"],
           ["Subscription", "/provider/subscription"],
+          ["Help & support", "/provider/support"],
         ]
       : [
           ["Overview", "/account"],
           ["My bookings", "/account/bookings"],
           ["My children", "/account/children"],
           ["Settings", "/account/settings"],
+          ["Help & support", "/account/support"],
         ];
   async function act(
     b: Booking,
@@ -249,9 +189,12 @@ export default function Platform() {
     await load();
   }
   function bookingList() {
-    return bookings.length ? (
+    const visible = bookings.filter(
+      (b) => bookingFilter === "all" || b.state === bookingFilter,
+    );
+    return visible.length ? (
       <div className="booking-list">
-        {bookings.map((b) => (
+        {visible.map((b) => (
           <article className="booking" key={b.id}>
             <div className="row">
               <span className={"badge " + b.state.toLowerCase()}>
@@ -307,8 +250,11 @@ export default function Platform() {
             </div>
             {b.offer && (
               <p>
-                Revised total: <strong>{money(b.offer.amountFils)}</strong> ·{" "}
+                Proposed total: <strong>{money(b.offer.amountFils)}</strong> ·{" "}
                 {b.offer.reason}
+                {b.offer.startsAt && (
+                  <span> · Proposed session: {date(b.offer.startsAt)}</span>
+                )}
               </p>
             )}
             {b.refunds?.map((r) => (
@@ -316,6 +262,7 @@ export default function Platform() {
                 Refund {r.status}: {money(r.amount_fils)}
               </p>
             ))}
+            <BookingHistory id={b.id} />
             <details>
               <summary>Accepted cancellation terms</summary>
               <p>{b.snapshot.policy}</p>
@@ -342,10 +289,27 @@ export default function Platform() {
                         type: "number",
                       },
                       { name: "reason", label: "Explain the change" },
+                      {
+                        name: "sessionId",
+                        label: "Proposed session",
+                        options: [
+                          { value: "", label: "Keep requested session" },
+                          ...(
+                            managed.find((a) =>
+                              a.sessions.some((s) => s.id === b.session_id),
+                            )?.sessions || []
+                          ).map((session) => ({
+                            value: session.id,
+                            label: date(session.starts_at),
+                          })),
+                        ],
+                        required: false,
+                      },
                     ]}
                     submit="Send revised offer"
                     onSubmit={(d) =>
                       act(b, "offer", {
+                        sessionId: d.sessionId || undefined,
                         amountFils: Math.round(Number(d.amount) * 100),
                         reason: d.reason,
                       })
@@ -389,13 +353,23 @@ export default function Platform() {
     );
   }
   function catalog() {
-    const list = activities
+    const list = (isProvider ? managed : activities)
       .filter(
         (a) => !isProvider || providers.some((p) => p.id === a.provider_id),
       )
       .filter(
         (a) =>
           (category === "All activities" || a.category === category) &&
+          (!age || (Number(age) >= a.min_age && Number(age) <= a.max_age)) &&
+          (!area || a.area === area) &&
+          (!maxPrice || a.price_fils <= Number(maxPrice) * 100) &&
+          (!onDate ||
+            a.sessions.some(
+              (session) =>
+                new Date(session.starts_at).toLocaleDateString("en-CA", {
+                  timeZone: "Asia/Dubai",
+                }) === onDate,
+            )) &&
           `${a.title} ${a.area} ${a.category}`
             .toLowerCase()
             .includes(search.toLowerCase()),
@@ -417,11 +391,71 @@ export default function Platform() {
               value={category}
               onChange={(e) => setCategory(e.target.value)}
             >
-              {categories.map((c) => (
+              {[
+                ...new Set([
+                  ...categories,
+                  ...activities.map((a) => a.category),
+                ]),
+              ].map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </select>
           </label>
+        </div>
+        <div className="filter-grid">
+          <label>
+            Child’s age
+            <input
+              type="number"
+              min="0"
+              max="18"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              placeholder="Any age"
+            />
+          </label>
+          <label>
+            Area
+            <select value={area} onChange={(e) => setArea(e.target.value)}>
+              <option value="">All areas</option>
+              {[...new Set(activities.map((a) => a.area))]
+                .sort()
+                .map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Maximum price (AED)
+            <input
+              type="number"
+              min="0"
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+              placeholder="Any budget"
+            />
+          </label>
+          <label>
+            Activity date
+            <input
+              type="date"
+              value={onDate}
+              onChange={(e) => setOnDate(e.target.value)}
+            />
+          </label>
+          <button
+            className="text-button"
+            onClick={() => {
+              setSearch("");
+              setCategory("All activities");
+              setAge("");
+              setArea("");
+              setMaxPrice("");
+              setOnDate("");
+            }}
+          >
+            Clear filters
+          </button>
         </div>
         <div className="row">
           <p>{list.length} activities to explore</p>
@@ -776,6 +810,7 @@ export default function Platform() {
                     text="This activity may no longer be published."
                   />
                 ))}
+              {path === "/reset-password" && <Recovery reset />}
               {path === "/sign-in" && (
                 <section className="auth-card">
                   <p className="eyebrow">Your next adventure awaits</p>
@@ -812,6 +847,7 @@ export default function Platform() {
                       await load();
                     }}
                   />
+                  <Recovery />
                   <details>
                     <summary>New here? Create an account</summary>
                     <Form
@@ -922,8 +958,25 @@ export default function Platform() {
                       </>
                     )}
                     {(path.endsWith("/bookings") ||
-                      path.endsWith("/requests")) &&
-                      bookingList()}
+                      path.endsWith("/requests")) && (
+                      <>
+                        <label className="booking-filter">
+                          Booking status
+                          <select
+                            value={bookingFilter}
+                            onChange={(e) => setBookingFilter(e.target.value)}
+                          >
+                            <option value="all">All statuses</option>
+                            {Object.entries(labels).map(([value, label]) => (
+                              <option value={value} key={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {bookingList()}
+                      </>
+                    )}
                     {path === "/account/children" && (
                       <>
                         <p>
@@ -941,6 +994,7 @@ export default function Platform() {
                                 Date of birth:{" "}
                                 {String(c.birth_date).slice(0, 10)}
                               </p>
+                              <ChildEditor child={c} refresh={load} />
                             </article>
                           ))}
                         </div>
@@ -964,23 +1018,6 @@ export default function Platform() {
                           />
                         </section>
                       </>
-                    )}
-                    {path === "/account/settings" && (
-                      <section className="panel">
-                        <h2>{profile.email}</h2>
-                        <p>
-                          WhatsApp notification preferences and account deletion
-                          will be available after the privacy and communication
-                          rules are approved.
-                        </p>
-                        <Action
-                          label="Sign out"
-                          onClick={async () => {
-                            await auth?.auth.signOut();
-                            router.push("/");
-                          }}
-                        />
-                      </section>
                     )}
                     {(path === "/provider/profile" ||
                       path === "/admin/providers") && (
@@ -1023,7 +1060,7 @@ export default function Platform() {
                               {
                                 name: "activityId",
                                 label: "Activity",
-                                options: activities.map((a) => ({
+                                options: managed.map((a) => ({
                                   value: a.id,
                                   label: a.title,
                                 })),
@@ -1045,6 +1082,14 @@ export default function Platform() {
                         </section>
                       </>
                     )}
+                    {path === "/admin/activities" && (
+                      <ActivityManager activities={managed} refresh={load} />
+                    )}
+                    <BaseFeatures
+                      path={path}
+                      profile={profile}
+                      refresh={load}
+                    />
                     {path === "/admin/activities" && (
                       <section className="panel">
                         <h2>Publish an activity</h2>
@@ -1100,8 +1145,19 @@ export default function Platform() {
                               label: "Places allocated to the platform",
                               type: "number",
                             },
+                            {
+                              name: "publication",
+                              label: "Visibility",
+                              options: [
+                                { value: "false", label: "Save as draft" },
+                                {
+                                  value: "true",
+                                  label: "Publish reviewed activity",
+                                },
+                              ],
+                            },
                           ]}
-                          submit="Publish activity"
+                          submit="Create activity"
                           onSubmit={async (d) => {
                             await api("/activities", {
                               ...d,
@@ -1111,7 +1167,7 @@ export default function Platform() {
                               capacity: Number(d.capacity),
                               startsAt: new Date(d.startsAt).toISOString(),
                               cutoffAt: new Date(d.cutoffAt).toISOString(),
-                              published: true,
+                              published: d.publication === "true",
                             });
                             await load();
                           }}
@@ -1337,29 +1393,7 @@ export default function Platform() {
               )}
               {["/about", "/contact", "/faq", "/terms", "/privacy"].includes(
                 path,
-              ) && (
-                <section className="auth-card">
-                  <p className="eyebrow">360 Kids Activity</p>
-                  <h1>
-                    {path === "/about"
-                      ? "A world of discovery."
-                      : path === "/contact"
-                        ? "Let’s talk."
-                        : path === "/faq"
-                          ? "A little clarity."
-                          : "Your trust matters."}
-                  </h1>
-                  <p>
-                    {path === "/about"
-                      ? "We’re creating a place for families to discover activities that help children explore their interests and grow."
-                      : path === "/faq"
-                        ? "A request is sent to the provider for an availability check. Accepted places are held, and verified payment confirms your booking."
-                        : path === "/contact"
-                          ? "Support contact details will be published after verification by the 360 Kids team."
-                          : "The client-approved policy will be published here before launch."}
-                  </p>
-                </section>
-              )}
+              ) && <PublicContent slug={path.slice(1)} />}
             </>
           )}
         </div>

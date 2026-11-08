@@ -30,6 +30,7 @@ export interface Profile {
   id: string;
   email: string;
   role: string;
+  display_name?: string;
 }
 export interface Child {
   id: string;
@@ -49,6 +50,8 @@ export interface Session {
   cutoff_at: string;
 }
 export interface Activity {
+  version: number;
+  published: boolean;
   id: string;
   provider_id: string;
   title: string;
@@ -63,6 +66,7 @@ export interface Activity {
   sessions: Session[];
 }
 export interface Booking {
+  session_id: string;
   id: string;
   state: string;
   version: number;
@@ -78,7 +82,13 @@ export interface Booking {
     startsAt: string;
     policy: string;
   };
-  offer: { amountFils: number; reason: string; expiresAt: string } | null;
+  offer: {
+    amountFils: number;
+    reason: string;
+    expiresAt: string;
+    sessionId?: string;
+    startsAt?: string;
+  } | null;
   children: Child[];
   refunds: { status: string; amount_fils: number }[] | null;
 }
