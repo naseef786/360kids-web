@@ -1,0 +1,38 @@
+{
+  "brand": "360 Kids Activity",
+  "status": "Proposed tokens; raster renderings approximate",
+  "colors": {
+    "background": "#FFFCF8",
+    "surface": "#FFFFFF",
+    "text": "#172B3A",
+    "supportingText": "#52616B",
+    "primary": "#F5A300",
+    "primaryText": "#172B3A",
+    "secondary": "#087F8C",
+    "paleAqua": "#E5F7F6",
+    "palePink": "#FCEAF3",
+    "border": "#DFE6E9"
+  },
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64
+  ],
+  "radius": {
+    "input": 12,
+    "card": 20
+  },
+  "bodySize": 16,
+  "controlTarget": 44,
+  "mobileTabs": [
+    "Explore",
+    "Saved",
+    "Bookings",
+    "Profile"
+  ]
+}
