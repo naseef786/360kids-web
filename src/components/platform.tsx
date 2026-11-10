@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
 import MobileNavigation from "./mobile-navigation";
+import BookingBrowser from "./booking-browser";
+import { bookingPagePath, type BookingPage } from "@/lib/booking-pages";
 import { safeReturnTo } from "@/lib/navigation";
 import { bookingIsOverdue, visibleInWorkspace } from "@/lib/booking-view";
 import RealtimeNotifications from "./realtime-notifications";
@@ -52,7 +54,7 @@ export default function Platform() {
   const [profile, setProfile] = useState<Profile | null>(null),
     [activities, setActivities] = useState<Activity[]>([]),
     [children, setChildren] = useState<Child[]>([]),
-    [bookings, setBookings] = useState<Booking[]>([]),
+    [bookingPage, setBookingPage] = useState<BookingPage | null>(null),
     [providers, setProviders] = useState<Provider[]>([]),
     [ops, setOps] = useState<Operations | null>(null),
     [loading, setLoading] = useState(true),
@@ -63,7 +65,6 @@ export default function Platform() {
     [area, setArea] = useState(""),
     [maxPrice, setMaxPrice] = useState(""),
     [onDate, setOnDate] = useState(""),
-    [bookingFilter, setBookingFilter] = useState("all"),
     [category, setCategory] = useState("All activities"),
     [selected, setSelected] = useState<string[]>([]);
   const [syncVersion, setSyncVersion] = useState(0);
@@ -75,14 +76,16 @@ export default function Platform() {
     return () => clearInterval(timer);
   }, []);
   const latestPath = useRef(path);
-  useEffect(() => { latestPath.current = path; }, [path]);
+  useEffect(() => {
+    latestPath.current = path;
+  }, [path]);
   const requestVersion = useRef(0),
     identity = useRef<string | null>(null),
     alive = useRef(true);
   const clearPrivate = useCallback(() => {
     setProfile(null);
     setChildren([]);
-    setBookings([]);
+    setBookingPage(null);
     setProviders([]);
     setManaged([]);
     setOps(null);
@@ -105,14 +108,24 @@ export default function Platform() {
             const [kids, requests, partners, listings, operations] =
               await Promise.all([
                 api<Child[]>("/children"),
-                api<Booking[]>(
-                  "/bookings?scope=" +
-                    (path.startsWith("/provider")
-                      ? "provider"
-                      : path.startsWith("/admin")
-                        ? "all"
-                        : "family"),
-                ),
+                path.endsWith("/bookings") ||
+                path.endsWith("/requests") ||
+                path.endsWith("/finance")
+                  ? Promise.resolve(null)
+                  : api<BookingPage>(
+                      bookingPagePath({
+                        scope: path.startsWith("/provider")
+                          ? "provider"
+                          : path.startsWith("/admin")
+                            ? "all"
+                            : "family",
+                        state:
+                          path === "/provider" || path === "/admin"
+                            ? "attention"
+                            : "all",
+                        search: "",
+                      }),
+                    ),
                 api<Provider[]>("/providers"),
                 api<Activity[]>("/manage/activities"),
                 me.role === "admin"
@@ -150,7 +163,7 @@ export default function Platform() {
         } else {
           setProfile(me);
           setChildren(kids);
-          setBookings(requests);
+          setBookingPage(requests);
           setProviders(partners);
           setManaged(listings);
           setOps(operations);
@@ -194,7 +207,12 @@ export default function Platform() {
       }
       if (
         changed ||
-        ["INITIAL_SESSION", "USER_UPDATED", "PASSWORD_RECOVERY", "TOKEN_REFRESHED"].includes(event)
+        [
+          "INITIAL_SESSION",
+          "USER_UPDATED",
+          "PASSWORD_RECOVERY",
+          "TOKEN_REFRESHED",
+        ].includes(event)
       )
         queue();
     });
@@ -212,7 +230,7 @@ export default function Platform() {
     isAccount = path.startsWith("/account"),
     isProvider = path.startsWith("/provider"),
     isAdmin = path.startsWith("/admin");
-  const workspaceBookings = bookings.filter((b) =>
+  const workspaceBookings = (bookingPage?.items ?? []).filter((b) =>
     visibleInWorkspace(
       b,
       isAccount ? "family" : isProvider ? "provider" : "admin",
@@ -264,21 +282,18 @@ export default function Platform() {
       version: b.version,
       ...extra,
     });
-    await load();
+    await refreshLive();
   }
-  function bookingList(attentionOnly = false) {
-    const visible = workspaceBookings.filter(
+  function bookingList(items = workspaceBookings, attentionOnly = false) {
+    const visible = items.filter(
       (b) =>
-        (!attentionOnly ||
-          [
-            "REQUESTED",
-            "OFFER_PENDING",
-            "PAYMENT_DUE",
-            "PAYMENT_CHECKING",
-          ].includes(b.state)) &&
-        (!(path.endsWith("/bookings") || path.endsWith("/requests")) ||
-          bookingFilter === "all" ||
-          b.state === bookingFilter),
+        !attentionOnly ||
+        [
+          "REQUESTED",
+          "OFFER_PENDING",
+          "PAYMENT_DUE",
+          "PAYMENT_CHECKING",
+        ].includes(b.state),
     );
     return visible.length ? (
       <div className="booking-list">
@@ -1110,12 +1125,6 @@ export default function Platform() {
                   />
                 ) : (
                   <>
-                    {bookings.length >= 200 && (
-                      <p className="notice">
-                        Showing up to 200 booking records, with active requests
-                        first. Contact support for older records.
-                      </p>
-                    )}
                     <div className="section-heading">
                       <div>
                         <p className="eyebrow">
@@ -1141,53 +1150,63 @@ export default function Platform() {
                         <div className="stats">
                           <Stat
                             label="Requests"
-                            value={
-                              workspaceBookings.filter(
-                                (b) => b.state === "REQUESTED",
-                              ).length
-                            }
+                            value={bookingPage?.counts.REQUESTED ?? 0}
                           />
                           <Stat
                             label="Payment checks"
-                            value={
-                              workspaceBookings.filter(
-                                (b) => b.state === "PAYMENT_CHECKING",
-                              ).length
-                            }
+                            value={bookingPage?.counts.PAYMENT_CHECKING ?? 0}
                           />
                           <Stat
                             label="Confirmed"
-                            value={
-                              workspaceBookings.filter(
-                                (b) => b.state === "CONFIRMED",
-                              ).length
-                            }
+                            value={bookingPage?.counts.CONFIRMED ?? 0}
                           />
                         </div>
                         <h2>
-                          {isAccount ? "Your bookings" : "Needs attention"}
+                          {isAccount
+                            ? "Your latest bookings"
+                            : "Latest requests needing attention"}
                         </h2>
-                        {bookingList(!isAccount)}
+                        {bookingPage && (
+                          <p>
+                            Showing {bookingPage.items.length} of{" "}
+                            {bookingPage.total}{" "}
+                            {isAccount
+                              ? "bookings"
+                              : "requests needing attention"}
+                            .
+                          </p>
+                        )}
+                        {bookingList(workspaceBookings, !isAccount)}
+                        <Link
+                          className="button secondary"
+                          href={
+                            isAccount
+                              ? "/account/bookings"
+                              : isProvider
+                                ? "/provider/requests"
+                                : "/admin/bookings"
+                          }
+                        >
+                          View all bookings
+                        </Link>
                       </>
                     )}
                     {(path.endsWith("/bookings") ||
                       path.endsWith("/requests")) && (
                       <>
-                        <label className="booking-filter">
-                          Booking status
-                          <select
-                            value={bookingFilter}
-                            onChange={(e) => setBookingFilter(e.target.value)}
-                          >
-                            <option value="all">All statuses</option>
-                            {Object.entries(labels).map(([value, label]) => (
-                              <option value={value} key={value}>
-                                {label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {bookingList()}
+                        <BookingBrowser
+                          key={`${profile.id}:${profile.role}:${path}`}
+                          scope={
+                            isAccount
+                              ? "family"
+                              : isProvider
+                                ? "provider"
+                                : "all"
+                          }
+                          revision={syncVersion}
+                        >
+                          {(items) => bookingList(items)}
+                        </BookingBrowser>
                       </>
                     )}
                     {path === "/account/children" && (
@@ -1430,7 +1449,13 @@ export default function Platform() {
                             text="Provider cancellations of paid bookings will appear here."
                           />
                         )}
-                        {bookingList()}
+                        <BookingBrowser
+                          key={`${profile.id}:${profile.role}:${path}`}
+                          scope="all"
+                          revision={syncVersion}
+                        >
+                          {(items) => bookingList(items)}
+                        </BookingBrowser>
                       </>
                     )}
                     {path === "/admin/contacts" && (

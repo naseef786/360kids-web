@@ -101,3 +101,46 @@ test("notification destinations distinguish a provider’s own family bookings a
     "/account",
   );
 });
+
+import { appendBookingPage, bookingPagePath } from "../src/lib/booking-pages";
+
+test("booking page queries preserve literal filters and cursors without query injection", () => {
+  const path = bookingPagePath(
+    { scope: "family", state: "CONFIRMED", search: "art & play?scope=all %_" },
+    "cursor+/=",
+  );
+  const url = new URL(path, "https://example.invalid");
+  assert.equal(url.pathname, "/bookings/page");
+  assert.equal(url.searchParams.get("scope"), "family");
+  assert.equal(url.searchParams.get("search"), "art & play?scope=all %_");
+  assert.equal(url.searchParams.get("cursor"), "cursor+/=");
+  assert.equal(url.searchParams.get("limit"), "25");
+});
+test("overlapping booking pages retain one updated record per ID and current totals", () => {
+  const previous = {
+    items: [booking, { ...booking, id: "second" }],
+    total: 3,
+    counts: { CONFIRMED: 1 },
+    nextCursor: "old",
+  };
+  const next = {
+    items: [
+      { ...booking, id: "second", state: "CONFIRMED", version: 3 },
+      { ...booking, id: "third" },
+    ],
+    total: 4,
+    counts: { CONFIRMED: 2 },
+    nextCursor: null,
+  };
+  const merged = appendBookingPage(previous, next);
+  assert.deepEqual(
+    merged.items.map((b) => b.id),
+    [booking.id, "second", "third"],
+  );
+  assert.equal(merged.items[1].state, "CONFIRMED");
+  assert.equal(merged.items[1].version, 3);
+  assert.equal(merged.total, 4);
+  assert.deepEqual(merged.counts, { CONFIRMED: 2 });
+  assert.equal(merged.nextCursor, null);
+  assert.equal(previous.items[1].state, "OFFER_PENDING");
+});
