@@ -1,22 +1,19 @@
 # 360 Kids Web
 
-Next.js + TypeScript foundation for the family website, provider portal and admin dashboard.
+Next.js + TypeScript web application with responsive family, provider and admin workspaces. Uses the shared Express API and Supabase browser authentication.
 
-## Status
+## Setup (PowerShell)
 
-A static development preview is implemented. Authentication, catalog data, dashboards, booking APIs, payments and WhatsApp management screens are not implemented. The preview deliberately prevents indexing and takes no real bookings.
-
-## Windows / PowerShell setup
-
-Install Node.js 24 (tested with 24.22.1), then:
+Node.js 24.22.1:
 
 ```powershell
 npm ci
 Copy-Item .env.example .env.local
+# Fill the public Supabase URL/key and API URL.
 npm run dev
 ```
 
-Open http://localhost:3000. Run the backend separately on port 4000 when API integration begins.
+Open http://localhost:3000. Start `360kids-backend` separately on port 4000. No sample activity data is presented as a real catalog. Missing service configuration is shown as a recoverable error.
 
 ```powershell
 npm run lint
@@ -24,16 +21,42 @@ npm run typecheck
 npm run build
 ```
 
-## Repository boundaries
+## Routes
 
-- Web: https://github.com/naseef786/360kids-web
-- Backend/API, SQL migrations, jobs and integration contracts: https://github.com/naseef786/360kids-backend
-- Native Expo app: https://github.com/naseef786/360kids-mobile
+- `/`, `/activities`, `/activities/:id`: discovery, search/category filter, session selection, cancellation terms and multi-child booking requests.
+- `/sign-in`: email/password sign-in and account creation via Supabase. Email/password is an implementation assumption pending the final login-method decision. Configure confirmation and password recovery emails in Supabase. Social login remains outstanding.
+- `/account`, `/account/bookings`, `/account/children`, `/account/settings`: family overview, booking tracking, revised-price approval, children and account details.
+- `/become-a-provider`, `/provider/*`: applications, own published activities/corrections, incoming requests and booking actions.
+- `/admin/*`: booking operations, provider review, activity publishing, payment/refund review, contacts, campaign drafts and audit events.
 
-The backend is the source of truth for permissions, prices, booking transitions and API contracts. Future versioned API types should be generated from that contract for both clients. Do not create a separate database or booking rules inside the web app.
+Server permissions remain authoritative. Hiding a button is not authorization. Payment submission/verification is disabled by default until finance rules are configured. The subscription screen explicitly records the pending commercial decision rather than offering invented plans.
 
-## Next milestone
+The catch-all route handles the supported application paths and returns a not-found page for unknown paths. SEO/server-rendered catalog content, server-side catalog filtering and route-specific code splitting require follow-up. Robots indexing remains disabled for the development build.
 
-Build the role layouts, authentication, catalog and request-to-book flow against a documented backend contract. WhatsApp contact imports, permissions, templates and campaign management will be restricted admin features; no sending is wired into this starter.
+## Project status
 
-Environment files are ignored. Values prefixed NEXT_PUBLIC_ are public. Never put server keys, customer lists or private documents in this repository.
+See `docs/IMPLEMENTATION_STATUS.md`. This is an implemented development increment, not a production-ready complete platform. No browser visual or real-device QA has been performed. Legal/support content is pending client approval, not invented legal text.
+
+All `NEXT_PUBLIC_*` configuration is included in browser bundles. Do not put server keys, database URLs or customer records in these variables or this repository.
+
+## Base platform update
+
+Families can edit their display name, edit/archive eligible children, request an account deletion review, recover/reset a password and open private support requests. Providers can view their unpublished listings and track correction requests. Admins can edit/publish/hide listings, add sessions, complete correction reviews, publish reviewed page text and respond to support tickets. The app supports alternative-session offers with explicit parent approval.
+
+Additional screens: `/account/support`, `/provider/support`, `/admin/support`, `/admin/corrections`, `/admin/content`, `/reset-password`. Configure Supabase recovery redirects before testing account recovery. Full account erasure is a reviewed process and is not automatically executed by a deletion request.
+
+Catalog filtering now includes age, area, maximum price and activity date. These operate on the catalog loaded by the API; server-side pagination and search optimization remain needed for a larger catalog. Run the backend migrations before opening the updated workspaces.
+
+## Live dashboard updates
+
+Signed-in families, partners and admins have a notification menu with saved updates, unread counts, mark-read controls and older-page loading. Socket.IO signals refresh booking/workspace data without a manual page reload. Reconnect and tab focus fetch current records, including changes missed while offline. A visible connection indicator and retry action explain connection failures.
+
+Set `NEXT_PUBLIC_API_URL` to the backend origin without `/v1`. Use the matching backend version and apply all four migrations. Its persistent Node host/proxy must support `/socket.io` WebSocket and HTTP polling traffic; see the backend `docs/REALTIME.md`. There is no socket credential or client-selected recipient setting. Supabase tokens are supplied at connection time and refreshed on reconnect. This is dashboard notification support; browser system notifications, email and mobile push delivery are separate work.
+
+## Audit hardening — 10 November 2026
+
+Read `docs/AUDIT_2026-11-10.md` for fixed issues, validation and remaining release gates. Use the matching backend/web version and apply **all four migrations** in the intended development/staging project. The API exposes `/health/ready` separately from liveness and reports its finance capability. Booking queries can request `scope=family` or `scope=provider`; server ownership checks remain authoritative. Run `npm test` and `npm audit --audit-level=moderate` along with the existing checks. No client database changes, deployment or external messages are implied by source validation.
+
+## Listing review contract
+
+`POST /v1/bookings` requires `activityVersion` from the reviewed catalog listing. A changed listing returns 409 so the parent must refresh and review the current price and terms. Deploy the matching frontend and backend together.
