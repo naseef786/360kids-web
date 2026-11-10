@@ -1593,3 +1593,26 @@ main:focus {
 .listing-preview p {
   overflow-wrap: anywhere;
 }
+
+.booking-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin: 0 0 20px;
+}
+.booking-tools label {
+  min-width: 0;
+}
+.booking-browser > button {
+  margin-top: 20px;
+}
+@media (max-width: 700px) {
+  .booking-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .booking-tools button,
+  .booking-browser > button {
+    width: 100%;
+  }
+}
