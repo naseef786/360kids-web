@@ -74,6 +74,8 @@ export default function Platform() {
     const timer = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
+  const latestPath = useRef(path);
+  useEffect(() => { latestPath.current = path; }, [path]);
   const requestVersion = useRef(0),
     identity = useRef<string | null>(null),
     alive = useRef(true);
@@ -88,11 +90,12 @@ export default function Platform() {
     setFinanceEnabled(false);
   }, []);
   const load = useCallback(async () => {
-    if (!alive.current) return;
+    if (!alive.current || latestPath.current !== path) return;
     const version = ++requestVersion.current,
       userId = identity.current;
     const current = () =>
       alive.current &&
+      latestPath.current === path &&
       requestVersion.current === version &&
       identity.current === userId;
     const privateWork =
@@ -191,7 +194,7 @@ export default function Platform() {
       }
       if (
         changed ||
-        ["INITIAL_SESSION", "USER_UPDATED", "PASSWORD_RECOVERY"].includes(event)
+        ["INITIAL_SESSION", "USER_UPDATED", "PASSWORD_RECOVERY", "TOKEN_REFRESHED"].includes(event)
       )
         queue();
     });
@@ -961,6 +964,7 @@ export default function Platform() {
                                 throw new Error("Select at least one child.");
                               await api("/bookings", {
                                 sessionId: d.sessionId,
+                                activityVersion: activity.version,
                                 childIds: selected,
                                 policyAccepted: true,
                               });
