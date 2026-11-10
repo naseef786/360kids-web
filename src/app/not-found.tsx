@@ -1,7 +1,7 @@
 import Link from "next/link";
 export default function Missing() {
   return (
-    <main className="content">
+    <main id="main-content" className="content" tabIndex={-1}>
       <div className="empty">
         <span>✳</span>
         <h1>This adventure isn’t here.</h1>

@@ -42,7 +42,12 @@ export default async function Page({
 }) {
   const { path = [] } = await params;
   const name = path.join("/");
-  if (!pages.has(name) && !/^activities\/[0-9a-f-]{36}$/i.test(name))
+  if (
+    !pages.has(name) &&
+    !/^activities\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      name,
+    )
+  )
     notFound();
   return <Platform />;
 }

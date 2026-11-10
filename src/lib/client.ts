@@ -1,43 +1,35 @@
 import { createClient } from "@supabase/supabase-js";
+import { createApiClient, ApiError } from "./api-client";
+export { ApiError } from "./api-client";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL,
   key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-export const auth = url && key ? createClient(url, key) : null;
-export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-    this.name = "ApiError";
+export const auth = (() => {
+  if (!url || !key) return null;
+  try {
+    return createClient(url, key);
+  } catch {
+    return null;
   }
-}
-export async function api<T>(path: string, body?: unknown): Promise<T> {
-  const token = auth
-    ? (await auth.auth.getSession()).data.session?.access_token
-    : undefined;
-  const response = await fetch(API + "/v1" + path, {
-    method: body ? "POST" : "GET",
-    headers: {
-      ...(body
-        ? {
-            "Content-Type": "application/json",
-            "Idempotency-Key": crypto.randomUUID(),
-          }
-        : {}),
-      ...(token ? { Authorization: "Bearer " + token } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-  });
-  const data = await response.json();
-  if (!response.ok)
-    throw new ApiError(
-      data.message || "Unable to complete this request.",
-      response.status,
-    );
-  return data as T;
-}
+})();
+export const API =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
+export const api = createApiClient({
+  baseUrl: API,
+  getIdentity: async () => {
+    if (!auth) return null;
+    const { data, error } = await auth.auth.getSession();
+    if (error)
+      throw new ApiError(
+        "Account verification is temporarily unavailable.",
+        503,
+      );
+    const session = data.session;
+    return session
+      ? { id: session.user.id, token: session.access_token }
+      : null;
+  },
+});
 export interface Profile {
   id: string;
   email: string;
@@ -78,6 +70,8 @@ export interface Activity {
   sessions: Session[];
 }
 export interface Booking {
+  parent_id: string;
+  provider_id: string;
   session_id: string;
   id: string;
   state: string;
@@ -146,8 +140,10 @@ export const money = (f: number) =>
     f / 100,
   );
 export const date = (s: string) =>
-  new Intl.DateTimeFormat("en-AE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Dubai",
-  }).format(new Date(s));
+  !s || !Number.isFinite(new Date(s).getTime())
+    ? "Date unavailable"
+    : new Intl.DateTimeFormat("en-AE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Asia/Dubai",
+      }).format(new Date(s));

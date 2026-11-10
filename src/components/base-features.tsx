@@ -10,27 +10,39 @@ import {
 } from "@/lib/client";
 import { Form, type Field } from "./form";
 function useResource<T>(endpoint: string | null, revision = 0) {
-  const [data, setData] = useState<T | null>(null),
-    [error, setError] = useState("");
+  const [resource, setResource] = useState<{
+    endpoint: string;
+    data: T | null;
+    error: string;
+  }>({ endpoint: "", data: null, error: "" });
   useEffect(() => {
-    let live = true;
+    const controller = new AbortController();
     if (endpoint)
-      void api<T>(endpoint)
+      void api<T>(endpoint, undefined, {
+        signal: controller.signal,
+        public: endpoint === "/content",
+      })
         .then((d) => {
-          if (live) {
-            setData(d);
-            setError("");
-          }
+          if (!controller.signal.aborted)
+            setResource({ endpoint, data: d, error: "" });
         })
         .catch((e) => {
-          if (live)
-            setError(e instanceof Error ? e.message : "Unable to load.");
+          if (!controller.signal.aborted)
+            setResource({
+              endpoint,
+              data: null,
+              error: e instanceof Error ? e.message : "Unable to load.",
+            });
         });
-    return () => {
-      live = false;
-    };
+    return () => controller.abort();
   }, [endpoint, revision]);
-  return { data, error };
+  return resource.endpoint === endpoint
+    ? {
+        data: resource.data,
+        error: resource.error,
+        loading: !resource.data && !resource.error,
+      }
+    : { data: null, error: "", loading: Boolean(endpoint) };
 }
 const fieldsFor = (a: Activity): Field[] => [
   { name: "title", label: "Activity title", defaultValue: a.title },
@@ -335,7 +347,9 @@ export function BaseFeatures({
               {tickets.error}
             </p>
           )}
-          {tickets.data?.length ? (
+          {tickets.loading ? (
+            <p role="status">Loading support requests…</p>
+          ) : tickets.data?.length ? (
             tickets.data.map((t) => (
               <article className="panel" key={t.id}>
                 <div className="row">
@@ -380,12 +394,12 @@ export function BaseFeatures({
                 )}
               </article>
             ))
-          ) : (
+          ) : !tickets.error ? (
             <div className="empty">
               <h3>No support requests</h3>
               <p>Your conversations will appear here.</p>
             </div>
-          )}
+          ) : null}
           <section className="panel">
             <h2>How can we help?</h2>
             <Form
@@ -477,7 +491,9 @@ export function BaseFeatures({
               {changes.error}
             </p>
           )}
-          {changes.data?.length ? (
+          {changes.loading ? (
+            <p role="status">Loading correction requests…</p>
+          ) : changes.data?.length ? (
             changes.data.map((c) => (
               <article className="review-item" key={c.id}>
                 <span className="badge">{c.status}</span>
@@ -517,9 +533,9 @@ export function BaseFeatures({
                 )}
               </article>
             ))
-          ) : (
+          ) : !changes.error ? (
             <p>No correction requests yet.</p>
-          )}
+          ) : null}
         </section>
       )}
     </>
@@ -542,6 +558,11 @@ export function Recovery({ reset = false }: { reset?: boolean }) {
       </summary>
       <Form
         fields={fields}
+        successMessage={
+          reset
+            ? "Your password has been updated."
+            : "If your account is eligible, check your inbox for a recovery link."
+        }
         submit={reset ? "Update password" : "Send recovery link"}
         onSubmit={async (d) => {
           if (!auth)
@@ -565,13 +586,15 @@ export function Recovery({ reset = false }: { reset?: boolean }) {
   );
 }
 export function PublicContent({ slug }: { slug: string }) {
-  const { data, error } = useResource<Content[]>("/content");
+  const { data, error, loading } = useResource<Content[]>("/content");
   const page = data?.find((p) => p.slug === slug);
   return (
     <section className="auth-card">
       <p className="eyebrow">360 Kids Activity</p>
       <h1>{page?.title || slug[0].toUpperCase() + slug.slice(1)}</h1>
-      {error ? (
+      {loading ? (
+        <p role="status">Loading page content…</p>
+      ) : error ? (
         <p role="alert" className="error">
           {error}
         </p>

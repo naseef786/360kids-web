@@ -17,3 +17,7 @@ This change is a source/CSS audit followed by lint, TypeScript and build validat
 In a real browser, test 320, 375, 430, 768, 1024 and 1440 px widths plus phone landscape. Check horizontal page overflow, bottom-bar active states, footer clearance, keyboard focus, 200% zoom, virtual-keyboard interaction, long names/emails, empty/error states and iPhone safe areas. Verify authenticated family/provider/admin screens using synthetic staging data. Supabase project access is required for the connected authenticated journeys.
 
 The viewport widths above define the manual test matrix, not measurements already executed. No credentials or real family data are used in this change.
+
+## Audit additions — 10 November 2026
+
+Verify workspace-scoped family navigation for provider/admin users acting as parents, draft listing previews, the main-content skip link, Escape dismissal of notifications, route loading, expired-action notices and form resets when changing activity/account. Automated checks do not replace this interactive matrix.

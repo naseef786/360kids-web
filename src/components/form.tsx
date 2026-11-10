@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 export type Field = {
   defaultValue?: string | number;
   name: string;
@@ -14,39 +14,46 @@ export function Form({
   onSubmit,
   submit = "Save",
   children,
+  successMessage = "Saved successfully.",
 }: {
   fields: Field[];
-  onSubmit: (data: Record<string, string>) => Promise<void>;
+  onSubmit: (data: Record<string, string>) => Promise<void | string>;
   submit?: string;
   children?: React.ReactNode;
+  successMessage?: string;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [saved, setSaved] = useState(false);
+    [saved, setSaved] = useState("");
+  const sending = useRef(false);
   async function send(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (sending.current) return;
+    sending.current = true;
     const form = e.currentTarget;
     setBusy(true);
     setError("");
-    setSaved(false);
+    setSaved("");
     try {
-      await onSubmit(
+      const message = await onSubmit(
         Object.fromEntries(new FormData(form)) as Record<string, string>,
       );
-      setSaved(true);
+      setSaved(message || successMessage);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to save.");
     } finally {
       setBusy(false);
+      sending.current = false;
     }
   }
   return (
-    <form onSubmit={send} className="form">
+    <form onSubmit={send} className="form" aria-busy={busy}>
       {fields.map((f) => (
         <label key={f.name}>
           {f.label}
           {f.type === "textarea" ? (
             <textarea
+              disabled={busy}
               defaultValue={f.defaultValue}
               name={f.name}
               required={f.required !== false}
@@ -54,6 +61,7 @@ export function Form({
             />
           ) : f.options ? (
             <select
+              disabled={busy}
               defaultValue={f.defaultValue}
               name={f.name}
               required={f.required !== false}
@@ -66,6 +74,7 @@ export function Form({
             </select>
           ) : (
             <input
+              disabled={busy}
               defaultValue={f.defaultValue}
               name={f.name}
               type={f.type || "text"}
@@ -84,7 +93,7 @@ export function Form({
       )}
       {saved && (
         <p role="status" className="success">
-          Saved successfully.
+          {saved}
         </p>
       )}
       <button disabled={busy}>{busy ? "Saving…" : submit}</button>

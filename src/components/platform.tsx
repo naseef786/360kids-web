@@ -1,10 +1,12 @@
 "use client";
 import Link from "next/link";
 import MobileNavigation from "./mobile-navigation";
+import { safeReturnTo } from "@/lib/navigation";
+import { bookingIsOverdue, visibleInWorkspace } from "@/lib/booking-view";
 import RealtimeNotifications from "./realtime-notifications";
 import { Form } from "./form";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   ApiError,
@@ -65,100 +67,156 @@ export default function Platform() {
     [category, setCategory] = useState("All activities"),
     [selected, setSelected] = useState<string[]>([]);
   const [syncVersion, setSyncVersion] = useState(0);
-  const load = useCallback(async () => {
-    try {
-      const catalog = await api<Activity[]>("/activities");
-      setActivities(catalog);
-      setError("");
-      const session = auth ? (await auth.auth.getSession()).data.session : null;
-      if (auth && session) {
-        const me = await api<Profile>("/me");
-        const [kids, requests, partners] = await Promise.all([
-          api<Child[]>("/children"),
-          api<Booking[]>("/bookings"),
-          api<Provider[]>("/providers"),
-        ]);
-        const operations =
-          me.role === "admin"
-            ? await api<Operations>("/admin/operations")
-            : null;
-        const listings = await api<Activity[]>("/manage/activities");
-        if (
-          (await auth.auth.getSession()).data.session?.user.id !==
-          session.user.id
-        )
-          return;
-        setManaged(listings);
-        setProfile(me);
-        setOps(operations);
-        setChildren(kids);
-        setBookings(requests);
-        setProviders(partners);
-      } else {
-        setProfile(null);
-        setBookings([]);
-        setChildren([]);
-      }
-    } catch (e) {
-      if (e instanceof ApiError && [401, 403].includes(e.status)) {
-        setProfile(null);
-        setChildren([]);
-        setBookings([]);
-        setProviders([]);
-        setManaged([]);
-        setOps(null);
-        setSelected([]);
-      }
-      setError(e instanceof Error ? e.message : "Unable to load.");
-    } finally {
-      setLoading(false);
-    }
+  const [financeEnabled, setFinanceEnabled] = useState(false);
+  const [loadedPath, setLoadedPath] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
   }, []);
+  const requestVersion = useRef(0),
+    identity = useRef<string | null>(null),
+    alive = useRef(true);
+  const clearPrivate = useCallback(() => {
+    setProfile(null);
+    setChildren([]);
+    setBookings([]);
+    setProviders([]);
+    setManaged([]);
+    setOps(null);
+    setSelected([]);
+    setFinanceEnabled(false);
+  }, []);
+  const load = useCallback(async () => {
+    if (!alive.current) return;
+    const version = ++requestVersion.current,
+      userId = identity.current;
+    const current = () =>
+      alive.current &&
+      requestVersion.current === version &&
+      identity.current === userId;
+    const privateWork =
+      userId && auth
+        ? (async () => {
+            const me = await api<Profile>("/me");
+            const [kids, requests, partners, listings, operations] =
+              await Promise.all([
+                api<Child[]>("/children"),
+                api<Booking[]>(
+                  "/bookings?scope=" +
+                    (path.startsWith("/provider")
+                      ? "provider"
+                      : path.startsWith("/admin")
+                        ? "all"
+                        : "family"),
+                ),
+                api<Provider[]>("/providers"),
+                api<Activity[]>("/manage/activities"),
+                me.role === "admin"
+                  ? api<Operations>("/admin/operations")
+                  : Promise.resolve(null),
+              ]);
+            return { me, kids, requests, partners, listings, operations };
+          })()
+        : Promise.resolve(null);
+    const [catalog, capabilities, account] = await Promise.allSettled([
+      api<Activity[]>("/activities", undefined, { public: true }),
+      api<{ financeEnabled: boolean }>("/status", undefined, { public: true }),
+      privateWork,
+    ] as const);
+    if (!current()) return;
+    const errors: string[] = [];
+    if (catalog.status === "fulfilled") setActivities(catalog.value);
+    else
+      errors.push(
+        catalog.reason instanceof Error
+          ? catalog.reason.message
+          : "Unable to load activities.",
+      );
+    setFinanceEnabled(
+      capabilities.status === "fulfilled" &&
+        capabilities.value.financeEnabled === true,
+    );
+    if (account.status === "fulfilled") {
+      if (account.value) {
+        const { me, kids, requests, partners, listings, operations } =
+          account.value;
+        if (me.id !== userId) {
+          clearPrivate();
+          errors.push("Your account changed. Please sign in again.");
+        } else {
+          setProfile(me);
+          setChildren(kids);
+          setBookings(requests);
+          setProviders(partners);
+          setManaged(listings);
+          setOps(operations);
+        }
+      } else clearPrivate();
+    } else {
+      const error = account.reason;
+      if (error instanceof ApiError && [401, 403].includes(error.status))
+        clearPrivate();
+      errors.push(
+        error instanceof Error ? error.message : "Unable to load your account.",
+      );
+    }
+    setError(errors.join(" "));
+    setLoadedPath(path);
+    setLoading(false);
+  }, [clearPrivate, path]);
   const refreshLive = useCallback(async () => {
     await load();
-    setSyncVersion((v) => v + 1);
+    if (alive.current) setSyncVersion((v) => v + 1);
   }, [load]);
   useEffect(() => {
-    if (auth) {
-      const subscription = auth.auth.onAuthStateChange((event) => {
-        if (event === "SIGNED_OUT") {
-          setProfile(null);
-          setChildren([]);
-          setBookings([]);
-          setProviders([]);
-          setManaged([]);
-          setOps(null);
-          setSelected([]);
-          setLoading(false);
-        }
-        setTimeout(() => void load(), 0);
-      });
-      return () => subscription.data.subscription.unsubscribe();
-    }
-    let mounted = true;
-    void api<Activity[]>("/activities")
-      .then((data) => {
-        if (mounted) {
-          setActivities(data);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (mounted) {
-          setError(e instanceof Error ? e.message : "Unable to load.");
-          setLoading(false);
-        }
-      });
-    return () => {
-      mounted = false;
+    alive.current = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const invalidate = () => {
+      requestVersion.current += 1;
     };
-  }, [load]);
+    const queue = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void load(), 0);
+    };
+    const subscription = auth?.auth.onAuthStateChange((event, session) => {
+      const userId = session?.user.id ?? null;
+      const changed = userId !== identity.current;
+      if (changed) {
+        identity.current = userId;
+        invalidate();
+        clearPrivate();
+        setError("");
+        setLoading(true);
+      }
+      if (
+        changed ||
+        ["INITIAL_SESSION", "USER_UPDATED", "PASSWORD_RECOVERY"].includes(event)
+      )
+        queue();
+    });
+    queue();
+    return () => {
+      alive.current = false;
+      invalidate();
+      if (timer) clearTimeout(timer);
+      subscription?.data.subscription.unsubscribe();
+    };
+  }, [load, clearPrivate]);
   const isHome = path === "/",
     isCatalog = path === "/activities",
     isDetail = path.startsWith("/activities/"),
     isAccount = path.startsWith("/account"),
     isProvider = path.startsWith("/provider"),
     isAdmin = path.startsWith("/admin");
+  const workspaceBookings = bookings.filter((b) =>
+    visibleInWorkspace(
+      b,
+      isAccount ? "family" : isProvider ? "provider" : "admin",
+      profile?.id,
+      providers.map((p) => p.id),
+    ),
+  );
   const activity = isDetail
     ? activities.find((a) => a.id === path.split("/")[2])
     : null;
@@ -205,9 +263,19 @@ export default function Platform() {
     });
     await load();
   }
-  function bookingList() {
-    const visible = bookings.filter(
-      (b) => bookingFilter === "all" || b.state === bookingFilter,
+  function bookingList(attentionOnly = false) {
+    const visible = workspaceBookings.filter(
+      (b) =>
+        (!attentionOnly ||
+          [
+            "REQUESTED",
+            "OFFER_PENDING",
+            "PAYMENT_DUE",
+            "PAYMENT_CHECKING",
+          ].includes(b.state)) &&
+        (!(path.endsWith("/bookings") || path.endsWith("/requests")) ||
+          bookingFilter === "all" ||
+          b.state === bookingFilter),
     );
     return visible.length ? (
       <div className="booking-list">
@@ -215,7 +283,11 @@ export default function Platform() {
           <article className="booking" key={b.id}>
             <div className="row">
               <span className={"badge " + b.state.toLowerCase()}>
-                {labels[b.state]}
+                {b.state === "OFFER_PENDING" && isProvider
+                  ? "Awaiting parent"
+                  : b.state === "REQUESTED" && isProvider
+                    ? "Your response needed"
+                    : labels[b.state]}
               </span>
               <small>#{b.id.slice(0, 8)}</small>
             </div>
@@ -230,20 +302,26 @@ export default function Platform() {
             <div className="status-box">
               <strong>
                 {b.state === "CONFIRMED"
-                  ? "Your places are confirmed"
+                  ? "Places are confirmed"
                   : b.held
-                    ? "Your places are held"
+                    ? "Places are held"
                     : "Places are not reserved"}
               </strong>
               <span>
                 {b.state === "REQUESTED"
-                  ? "The provider will check availability."
+                  ? isProvider
+                    ? "Check availability and respond to this request."
+                    : "The provider will check availability."
                   : b.state === "OFFER_PENDING"
-                    ? "Review the proposed total before accepting."
+                    ? isProvider
+                      ? "The family is reviewing the proposed total and session."
+                      : "Review the proposed total and session before accepting."
                     : b.state === "PAYMENT_CHECKING"
                       ? "Your payment is awaiting verification."
                       : b.state === "PAYMENT_DUE"
-                        ? "Complete payment using the agreed instructions."
+                        ? financeEnabled
+                          ? "Complete payment using the agreed instructions."
+                          : "Contact support for the agreed next step. Online payment submission is not available."
                         : "See your booking history or contact support."}
               </span>
               {["REQUESTED", "OFFER_PENDING", "PAYMENT_DUE"].includes(
@@ -265,6 +343,11 @@ export default function Platform() {
                 </small>
               )}
             </div>
+            {bookingIsOverdue(b, now) && (
+              <p className="notice">
+                This deadline has passed. Contact support for the next step.
+              </p>
+            )}
             {b.offer && (
               <p>
                 Proposed total: <strong>{money(b.offer.amountFils)}</strong> ·{" "}
@@ -285,65 +368,74 @@ export default function Platform() {
               <p>{b.snapshot.policy}</p>
             </details>
             <div className="actions">
-              {isAccount && b.state === "OFFER_PENDING" && (
-                <Action
-                  label="Accept revised offer"
-                  onClick={() => act(b, "accept-offer")}
-                />
-              )}{" "}
-              {(isProvider || isAdmin) && b.state === "REQUESTED" && (
-                <>
+              {isAccount &&
+                b.state === "OFFER_PENDING" &&
+                !bookingIsOverdue(b, now) && (
                   <Action
-                    label="Accept & hold places"
-                    onClick={() => act(b, "accept")}
+                    label="Accept revised offer"
+                    onClick={() => act(b, "accept-offer")}
                   />
-                  <Action label="Decline" onClick={() => act(b, "decline")} />
+                )}{" "}
+              {(isProvider || isAdmin) &&
+                b.state === "REQUESTED" &&
+                !bookingIsOverdue(b, now) && (
+                  <>
+                    <Action
+                      label="Accept & hold places"
+                      onClick={() => act(b, "accept")}
+                    />
+                    <Action label="Decline" onClick={() => act(b, "decline")} />
+                    <Form
+                      fields={[
+                        {
+                          name: "amount",
+                          label: "Revised total (AED)",
+                          type: "number",
+                        },
+                        { name: "reason", label: "Explain the change" },
+                        {
+                          name: "sessionId",
+                          label: "Proposed session",
+                          options: [
+                            { value: "", label: "Keep requested session" },
+                            ...(
+                              managed.find((a) =>
+                                a.sessions.some((s) => s.id === b.session_id),
+                              )?.sessions || []
+                            ).map((session) => ({
+                              value: session.id,
+                              label: date(session.starts_at),
+                            })),
+                          ],
+                          required: false,
+                        },
+                      ]}
+                      submit="Send revised offer"
+                      onSubmit={(d) =>
+                        act(b, "offer", {
+                          sessionId: d.sessionId || undefined,
+                          amountFils: Math.round(Number(d.amount) * 100),
+                          reason: d.reason,
+                        })
+                      }
+                    />
+                  </>
+                )}
+              {isAccount &&
+                financeEnabled &&
+                b.state === "PAYMENT_DUE" &&
+                !bookingIsOverdue(b, now) && (
                   <Form
                     fields={[
-                      {
-                        name: "amount",
-                        label: "Revised total (AED)",
-                        type: "number",
-                      },
-                      { name: "reason", label: "Explain the change" },
-                      {
-                        name: "sessionId",
-                        label: "Proposed session",
-                        options: [
-                          { value: "", label: "Keep requested session" },
-                          ...(
-                            managed.find((a) =>
-                              a.sessions.some((s) => s.id === b.session_id),
-                            )?.sessions || []
-                          ).map((session) => ({
-                            value: session.id,
-                            label: date(session.starts_at),
-                          })),
-                        ],
-                        required: false,
-                      },
+                      { name: "reference", label: "Bank transfer reference" },
                     ]}
-                    submit="Send revised offer"
+                    submit="Submit for verification"
                     onSubmit={(d) =>
-                      act(b, "offer", {
-                        sessionId: d.sessionId || undefined,
-                        amountFils: Math.round(Number(d.amount) * 100),
-                        reason: d.reason,
-                      })
+                      act(b, "proof", { reference: d.reference })
                     }
                   />
-                </>
-              )}
-              {isAccount && b.state === "PAYMENT_DUE" && (
-                <Form
-                  fields={[
-                    { name: "reference", label: "Bank transfer reference" },
-                  ]}
-                  submit="Submit for verification"
-                  onSubmit={(d) => act(b, "proof", { reference: d.reference })}
-                />
-              )}{" "}
-              {isAdmin && b.state === "PAYMENT_CHECKING" && (
+                )}{" "}
+              {isAdmin && financeEnabled && b.state === "PAYMENT_CHECKING" && (
                 <Action
                   label="Verify received payment"
                   onClick={() => act(b, "verify")}
@@ -364,8 +456,12 @@ export default function Platform() {
       </div>
     ) : (
       <Empty
-        title="No bookings yet"
-        text="Your requests and confirmed activities will appear here."
+        title={attentionOnly ? "You’re all caught up" : "No bookings yet"}
+        text={
+          attentionOnly
+            ? "There are no open requests in this queue."
+            : "Your requests and confirmed activities will appear here."
+        }
       />
     );
   }
@@ -480,36 +576,85 @@ export default function Platform() {
         </div>
         {list.length ? (
           <div className="cards">
-            {list.map((a, i) => (
-              <Link href={"/activities/" + a.id} className="card" key={a.id}>
-                <div className={"art art-" + (i % 4)}>
-                  <span>
-                    {a.category === "Sports"
-                      ? "↗"
-                      : a.category === "STEM"
-                        ? "✳"
-                        : "✽"}
-                  </span>
-                  <small>{a.category}</small>
-                </div>
-                <div className="card-body">
-                  <div className="row">
-                    <span className="eyebrow">{a.area}</span>
-                    <small>
-                      Ages {a.min_age}–{a.max_age}
-                    </small>
+            {list.map((a, i) => {
+              const card = (
+                <>
+                  <div className={"art art-" + (i % 4)}>
+                    <span>
+                      {a.category === "Sports"
+                        ? "↗"
+                        : a.category === "STEM"
+                          ? "✳"
+                          : "✽"}
+                    </span>
+                    <small>{a.category}</small>
                   </div>
-                  <h3>{a.title}</h3>
-                  <p>{a.provider_name}</p>
-                  <div className="row">
-                    <strong>
-                      {money(a.price_fils)} <small>/ child</small>
-                    </strong>
-                    <span className="round">↗</span>
+                  <div className="card-body">
+                    <div className="row">
+                      <span className="eyebrow">{a.area}</span>
+                      <small>
+                        Ages {a.min_age}–{a.max_age}
+                      </small>
+                    </div>
+                    <h3>{a.title}</h3>
+                    <p>{a.provider_name}</p>
+                    <div className="row">
+                      <strong>
+                        {money(a.price_fils)} <small>/ child</small>
+                      </strong>
+                      <span className="round">↗</span>
+                    </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </>
+              );
+              return isProvider ? (
+                <article className="card" key={a.id}>
+                  {card}
+                  <details className="listing-preview">
+                    <summary>Review listing details</summary>
+                    <p className="badge">
+                      {a.published &&
+                      providers.some(
+                        (p) =>
+                          p.id === a.provider_id && p.status === "approved",
+                      )
+                        ? "Published"
+                        : "Not public"}
+                    </p>
+                    <p className="prose">{a.description}</p>
+                    <h4>Cancellation terms</h4>
+                    <p className="prose">{a.policy}</p>
+                    <h4>Sessions</h4>
+                    {a.sessions.length ? (
+                      a.sessions.map((session) => (
+                        <p key={session.id}>
+                          {date(session.starts_at)} · cutoff{" "}
+                          {date(session.cutoff_at)} (Dubai)
+                        </p>
+                      ))
+                    ) : (
+                      <p>No sessions yet.</p>
+                    )}
+                    {a.published &&
+                      providers.some(
+                        (p) =>
+                          p.id === a.provider_id && p.status === "approved",
+                      ) && (
+                        <Link
+                          href={"/activities/" + a.id}
+                          className="button secondary"
+                        >
+                          View public listing
+                        </Link>
+                      )}
+                  </details>
+                </article>
+              ) : (
+                <Link href={"/activities/" + a.id} className="card" key={a.id}>
+                  {card}
+                </Link>
+              );
+            })}
           </div>
         ) : (
           <Empty
@@ -523,8 +668,6 @@ export default function Platform() {
   const parentNavigation =
     !isProvider &&
     !isAdmin &&
-    profile?.role !== "provider" &&
-    profile?.role !== "admin" &&
     path !== "/sign-in" &&
     path !== "/reset-password";
   return (
@@ -637,6 +780,8 @@ export default function Platform() {
         </div>
       )}
       <main
+        id="main-content"
+        tabIndex={-1}
         className={
           isAccount || isProvider || isAdmin
             ? `workspace ${isAccount ? "family-workspace" : ""}`
@@ -655,6 +800,7 @@ export default function Platform() {
             {links.map(([label, href]) => (
               <Link
                 className={path === href ? "active" : ""}
+                aria-current={path === href ? "page" : undefined}
                 href={href}
                 key={href}
               >
@@ -665,15 +811,21 @@ export default function Platform() {
               <Action
                 label="Sign out"
                 onClick={async () => {
-                  await auth?.auth.signOut();
+                  if (auth) {
+                    const { error } = await auth.auth.signOut();
+                    if (error) throw error;
+                  }
                   router.push("/");
                 }}
               />
             )}
           </aside>
         )}
-        <div className="main-panel">
-          {loading ? (
+        <div
+          className="main-panel"
+          key={`${profile?.id ?? "guest"}:${profile?.role ?? "guest"}:${path}`}
+        >
+          {loading || loadedPath !== path ? (
             <div role="status" className="loading">
               Finding your next adventure…
             </div>
@@ -792,6 +944,7 @@ export default function Platform() {
                           </Link>
                         ) : activity.sessions.length ? (
                           <Form
+                            key={`${profile.id}:${activity.id}:${activity.version}`}
                             fields={[
                               {
                                 name: "sessionId",
@@ -887,10 +1040,7 @@ export default function Platform() {
                         window.location.search,
                       ).get("returnTo");
                       router.push(
-                        destination?.startsWith("/") &&
-                          !destination.startsWith("//")
-                          ? destination
-                          : "/account",
+                        safeReturnTo(destination, window.location.origin),
                       );
                       await load();
                     }}
@@ -913,11 +1063,16 @@ export default function Platform() {
                           throw new Error("Use at least 12 characters.");
                         if (!auth)
                           throw new Error("Sign-up is not configured yet.");
-                        const { error } = await auth.auth.signUp({
+                        const { data, error } = await auth.auth.signUp({
                           email: d.email,
                           password: d.password,
                         });
                         if (error) throw error;
+                        if (data.session) {
+                          router.push("/account");
+                          await load();
+                        }
+                        return "Check your inbox to complete registration if confirmation is required, then sign in.";
                       }}
                     />
                   </details>
@@ -951,6 +1106,12 @@ export default function Platform() {
                   />
                 ) : (
                   <>
+                    {bookings.length >= 200 && (
+                      <p className="notice">
+                        Showing up to 200 booking records, with active requests
+                        first. Contact support for older records.
+                      </p>
+                    )}
                     <div className="section-heading">
                       <div>
                         <p className="eyebrow">
@@ -977,14 +1138,15 @@ export default function Platform() {
                           <Stat
                             label="Requests"
                             value={
-                              bookings.filter((b) => b.state === "REQUESTED")
-                                .length
+                              workspaceBookings.filter(
+                                (b) => b.state === "REQUESTED",
+                              ).length
                             }
                           />
                           <Stat
                             label="Payment checks"
                             value={
-                              bookings.filter(
+                              workspaceBookings.filter(
                                 (b) => b.state === "PAYMENT_CHECKING",
                               ).length
                             }
@@ -992,17 +1154,16 @@ export default function Platform() {
                           <Stat
                             label="Confirmed"
                             value={
-                              bookings.filter((b) => b.state === "CONFIRMED")
-                                .length
+                              workspaceBookings.filter(
+                                (b) => b.state === "CONFIRMED",
+                              ).length
                             }
                           />
                         </div>
                         <h2>
-                          {isAccount
-                            ? "Your upcoming adventures"
-                            : "Needs attention"}
+                          {isAccount ? "Your bookings" : "Needs attention"}
                         </h2>
-                        {bookingList()}
+                        {bookingList(!isAccount)}
                       </>
                     )}
                     {(path.endsWith("/bookings") ||
@@ -1134,6 +1295,7 @@ export default function Platform() {
                       <ActivityManager activities={managed} refresh={load} />
                     )}
                     <BaseFeatures
+                      key={`${profile.id}:${profile.role}:${path}`}
                       syncVersion={syncVersion}
                       path={path}
                       profile={profile}
@@ -1237,7 +1399,7 @@ export default function Platform() {
                               <span className="badge">{r.status}</span>
                               <strong>{money(r.amount_fils)}</strong>
                               <p>Booking #{r.booking_id.slice(0, 8)}</p>
-                              {r.status !== "completed" && (
+                              {financeEnabled && r.status !== "completed" && (
                                 <Form
                                   fields={[
                                     {

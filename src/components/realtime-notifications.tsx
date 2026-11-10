@@ -3,10 +3,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { API, api, ApiError, auth, date, type Profile } from "@/lib/client";
+import { notificationHref } from "@/lib/notification-view";
 interface Notice {
   id: string;
   sequence: string;
   kind: string;
+  workspace?: string;
   subject_id: string;
   event: string;
   created_at: string;
@@ -66,25 +68,32 @@ export default function RealtimeNotifications({
     [retry, setRetry] = useState(0),
     [busy, setBusy] = useState(false);
   const mounted = useRef(false);
+  const feedVersion = useRef(0),
+    menu = useRef<HTMLDetailsElement>(null);
   const fetchFeed = useCallback(async () => {
+    const version = ++feedVersion.current;
     try {
       const data = await api<Feed>("/notifications");
-      if (mounted.current) {
+      if (mounted.current && feedVersion.current === version) {
         setFeed(data);
         setError("");
       }
     } catch (e) {
-      if (mounted.current) {
+      if (mounted.current && feedVersion.current === version) {
         if (e instanceof ApiError && [401, 403].includes(e.status))
           setFeed(null);
         setError(
           e instanceof Error ? e.message : "Unable to load notifications.",
         );
+        setStatus(navigator.onLine ? "unavailable" : "offline");
       }
     }
   }, []);
   useEffect(() => {
     mounted.current = true;
+    const invalidate = () => {
+      feedVersion.current += 1;
+    };
     let disposed = false,
       pending: ReturnType<typeof setTimeout> | undefined,
       refreshing = false,
@@ -158,12 +167,19 @@ export default function RealtimeNotifications({
     socket.io.on("reconnect_attempt", () =>
       setStatus(navigator.onLine ? "reconnecting" : "offline"),
     );
-    const authSubscription = auth?.auth.onAuthStateChange((event) => {
+    const authSubscription = auth?.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") {
         socket.disconnect();
         return;
       }
-      if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
+      if (session?.user.id !== profile.id) {
+        socket.disconnect();
+        return;
+      }
+      if (
+        event === "TOKEN_REFRESHED" ||
+        (event === "SIGNED_IN" && !socket.connected)
+      ) {
         socket.disconnect();
         socket.connect();
       }
@@ -186,14 +202,17 @@ export default function RealtimeNotifications({
         !socket.connected &&
         navigator.onLine &&
         document.visibilityState === "visible"
-      )
+      ) {
+        if (!socket.active) socket.connect();
         schedule();
+      }
     }, 30000);
     schedule();
     socket.connect();
     return () => {
       disposed = true;
       mounted.current = false;
+      invalidate();
       if (pending) clearTimeout(pending);
       clearInterval(fallback);
       authSubscription?.data.subscription.unsubscribe();
@@ -205,7 +224,7 @@ export default function RealtimeNotifications({
       socket.io.removeAllListeners();
       socket.disconnect();
     };
-  }, [fetchFeed, onRefresh, retry]);
+  }, [fetchFeed, onRefresh, retry, profile.id]);
   async function mark(ids?: string[]) {
     setBusy(true);
     try {
@@ -221,12 +240,13 @@ export default function RealtimeNotifications({
   }
   async function more() {
     if (!feed?.nextBefore) return;
+    const version = feedVersion.current;
     setBusy(true);
     try {
       const next = await api<Feed>(
         "/notifications?before=" + encodeURIComponent(feed.nextBefore),
       );
-      if (mounted.current)
+      if (mounted.current && version === feedVersion.current)
         setFeed((current) =>
           current
             ? {
@@ -247,30 +267,8 @@ export default function RealtimeNotifications({
       setBusy(false);
     }
   }
-  function destination(n: Notice) {
-    const base =
-      profile.role === "admin"
-        ? "/admin"
-        : profile.role === "provider"
-          ? "/provider"
-          : "/account";
-    if (n.kind === "booking")
-      return base + (profile.role === "provider" ? "/requests" : "/bookings");
-    if (n.kind === "support") return base + "/support";
-    if (n.kind === "correction")
-      return profile.role === "admin"
-        ? "/admin/corrections"
-        : "/provider/activities";
-    if (n.kind === "provider")
-      return profile.role === "admin"
-        ? "/admin/providers"
-        : "/provider/profile";
-    if (n.kind === "activity")
-      return profile.role === "admin"
-        ? "/admin/activities"
-        : "/provider/activities";
-    return base;
-  }
+  const destination = (notice: Notice) =>
+    notificationHref(notice, profile.role);
   const label = {
     connecting: "Connecting live updates",
     live: "Live updates on",
@@ -289,7 +287,17 @@ export default function RealtimeNotifications({
           Retry live updates
         </button>
       )}
-      <details className="notification-menu">
+      <details
+        ref={menu}
+        className="notification-menu"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && menu.current?.open) {
+            menu.current.open = false;
+            menu.current.querySelector("summary")?.focus();
+            event.stopPropagation();
+          }
+        }}
+      >
         <summary aria-label={`Notifications, ${feed?.unread ?? 0} unread`}>
           <svg
             viewBox="0 0 24 24"
@@ -339,6 +347,7 @@ export default function RealtimeNotifications({
                   href={destination(n)}
                   onClick={() => {
                     if (!n.read_at) void mark([n.id]);
+                    if (menu.current) menu.current.open = false;
                   }}
                 >
                   <strong>
