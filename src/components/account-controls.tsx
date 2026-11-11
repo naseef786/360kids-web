@@ -1,12 +1,29 @@
 "use client";
-import { useState, type FormEvent } from "react";
+
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { errorMessage } from "@/lib/client-api";
-export function SignOut() {
+import { fetchJson } from "@/lib/http";
+import {
+  localizedAuthMessage,
+  type AuthCopy,
+  type AuthMode,
+} from "@/lib/auth-copy";
+import type { Locale } from "@/lib/i18n";
+
+export function SignOut({
+  locale,
+  label,
+  pendingLabel,
+}: {
+  locale: Locale;
+  label: string;
+  pendingLabel: string;
+}) {
   const router = useRouter();
-  const [pending, setPending] = useState(false),
-    [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
   return (
     <div>
       <button
@@ -15,95 +32,92 @@ export function SignOut() {
         onClick={async () => {
           setPending(true);
           try {
-            const response = await fetch("/api/auth", {
+            await fetchJson("/api/auth", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ action: "signout" }),
             });
-            if (!response.ok)
-              throw new Error("Unable to sign out. Please try again.");
             router.replace("/login");
             router.refresh();
-          } catch (e) {
-            setError(errorMessage(e));
+          } catch (caught) {
+            setError(localizedAuthMessage(locale, errorMessage(caught)));
             setPending(false);
           }
         }}
       >
-        {pending ? "Signing out…" : "Sign out"}
+        {pending ? pendingLabel : label}
       </button>
       {error && <p role="alert">{error}</p>}
     </div>
   );
 }
+
 export function AuthForm({
   mode,
   next = "/parent",
   linkError = false,
+  locale,
+  copy,
 }: {
-  mode: "signin" | "signup" | "recover" | "update-password";
+  mode: AuthMode;
   next?: string;
   linkError?: boolean;
+  locale: Locale;
+  copy: AuthCopy;
 }) {
   const router = useRouter();
-  const [pending, setPending] = useState(false),
-    [message, setMessage] = useState(""),
-    [error, setError] = useState(
-      linkError
-        ? "This link has expired or is invalid. Please request a new one."
-        : "",
-    );
-  const title = {
-    signin: "Welcome back",
-    signup: "Start your family account",
-    recover: "Reset your password",
-    "update-password": "Choose a new password",
-  }[mode];
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState(linkError ? copy.invalidLink : "");
+  const sending = useRef(false);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (sending.current) return;
+    sending.current = true;
     setPending(true);
     setMessage("");
     setError("");
     const data = new FormData(event.currentTarget);
     try {
-      const response = await fetch("/api/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: mode,
-          email: data.get("email"),
-          password: data.get("password"),
-          next,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
+      const result = await fetchJson<{ next?: string; message: string }>(
+        "/api/auth",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: mode,
+            email: data.get("email"),
+            password: data.get("password"),
+            next,
+          }),
+        },
+      );
       if (result.next) {
         router.replace(result.next);
         router.refresh();
-      } else setMessage(result.message);
-    } catch (e) {
-      setError(errorMessage(e));
+      } else {
+        setMessage(localizedAuthMessage(locale, result.message));
+      }
+    } catch (caught) {
+      setError(localizedAuthMessage(locale, errorMessage(caught)));
     } finally {
+      sending.current = false;
       setPending(false);
     }
   }
+
   return (
     <section className="auth-card panel">
-      <span className="eyebrow">EXPLORE. PLAY. GROW.</span>
-      <h1>{title}</h1>
-      <p>
-        {mode === "signin"
-          ? "A little more discovery, a lot more possibility."
-          : mode === "signup"
-            ? "Find activities and manage your family in one place."
-            : "We’ll help you get back to your family activities."}
-      </p>
-      <form onSubmit={submit} className="form-stack">
+      <span className="eyebrow">{copy.eyebrow}</span>
+      <h1>{copy.titles[mode]}</h1>
+      <p>{copy.descriptions[mode]}</p>
+      <form onSubmit={submit} className="form-stack" aria-busy={pending}>
         {mode !== "update-password" && (
           <label>
-            Email address
+            {copy.email}
             <input
+              disabled={pending}
               name="email"
               type="email"
               autoComplete="email"
@@ -114,9 +128,10 @@ export function AuthForm({
         )}
         {mode !== "recover" && (
           <label>
-            Password
+            {copy.password}
             <input
-              aria-label="Password"
+              aria-label={copy.password}
+              disabled={pending}
               name="password"
               type="password"
               minLength={mode === "signin" ? 1 : 8}
@@ -127,7 +142,7 @@ export function AuthForm({
               required
             />
             {mode !== "signin" && (
-              <small className="fine-print">At least 8 characters.</small>
+              <small className="fine-print">{copy.passwordHint}</small>
             )}
           </label>
         )}
@@ -142,27 +157,22 @@ export function AuthForm({
           </p>
         )}
         <button className="btn" disabled={pending}>
-          {pending
-            ? "Please wait…"
-            : {
-                signin: "Sign in",
-                signup: "Create account",
-                recover: "Send reset link",
-                "update-password": "Update password",
-              }[mode]}
+          {pending ? copy.pleaseWait : copy.submit[mode]}
         </button>
       </form>
       <div className="auth-links">
         {mode === "signin" ? (
           <>
-            <Link href="/forgot-password">Forgot password?</Link>
+            <Link href={`/forgot-password?next=${encodeURIComponent(next)}`}>
+              {copy.forgotPassword}
+            </Link>
             <Link href={`/signup?next=${encodeURIComponent(next)}`}>
-              Create an account
+              {copy.createAccount}
             </Link>
           </>
         ) : (
           <Link href={`/login?next=${encodeURIComponent(next)}`}>
-            Back to sign in
+            {copy.backToSignIn}
           </Link>
         )}
       </div>

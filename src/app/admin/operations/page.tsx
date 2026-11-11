@@ -11,6 +11,7 @@ import {
 } from "@/components/operations";
 type RecordRow = {
   id: string;
+  provider_id?: string;
   action?: string;
   created_at?: string;
   message?: string;
@@ -37,7 +38,7 @@ export default async function PageScreen({
       "/admin/operations",
       "superadmin",
     ),
-    query = await pageQuery(searchParams),
+    query = await pageQuery(searchParams,["resource"]),
     resources = [
       "corrections",
       "audit",
@@ -80,7 +81,7 @@ export default async function PageScreen({
       ) : null}
       <div className="stack section-gap">
         {data.items.map((row) => (
-          <article className="record-card" key={row.id ?? row.name}>
+          <article className="record-card" key={row.id ?? row.provider_id}>
             <h3>
               {row.title ?? row.action ?? row.name ?? row.plan ?? "Refund"}
             </h3>

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/server-api";
+import { jsonBody } from "@/lib/request-body";
+import { RequestError } from "@/lib/http";
+import { sameOrigin, requestOrigin } from "@/lib/same-origin";
 export async function POST(request: NextRequest) {
-  if (request.headers.get("origin") !== request.nextUrl.origin)
+  if (!sameOrigin(request))
     return NextResponse.json(
       { message: "Please use this website to continue." },
       { status: 403 },
@@ -13,7 +16,7 @@ export async function POST(request: NextRequest) {
       { status: 413 },
     );
   try {
-    const body = await request.json();
+    const body = await jsonBody(request,8192);
     const auth = await supabase();
     const action = body.action;
     if (action === "signout") {
@@ -53,7 +56,7 @@ export async function POST(request: NextRequest) {
                 ? "Please confirm your email before signing in."
                 : "Unable to sign in. Check your email and password.",
           },
-          { status: 401 },
+          { status: error.status && error.status >= 500 ? 503 : error.status === 429 ? 429 : 401 },
         );
       return NextResponse.json({ next: safeNext(body.next) });
     }
@@ -62,7 +65,7 @@ export async function POST(request: NextRequest) {
         email,
         password,
         options: {
-          emailRedirectTo: `${request.nextUrl.origin}/auth/callback?next=${encodeURIComponent(safeNext(body.next))}`,
+          emailRedirectTo: `${requestOrigin(request)}/auth/callback?next=${encodeURIComponent(safeNext(body.next))}`,
         },
       });
       if (error)
@@ -83,9 +86,10 @@ export async function POST(request: NextRequest) {
       );
     }
     if (action === "recover") {
-      await auth.auth.resetPasswordForEmail(email, {
-        redirectTo: `${request.nextUrl.origin}/auth/callback?next=/reset-password`,
+      const {error} = await auth.auth.resetPasswordForEmail(email, {
+        redirectTo: `${requestOrigin(request)}/auth/callback?next=/reset-password`,
       });
+      if(error) return NextResponse.json({message:"Password recovery is temporarily unavailable. Please try again."},{status:error.status === 429 ? 429 : 503});
       return NextResponse.json({
         message:
           "If an account exists, a password reset link will arrive by email.",
@@ -112,10 +116,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ next: "/parent" });
     }
     return NextResponse.json({ message: "Unknown action." }, { status: 422 });
-  } catch {
+  } catch(error) {
     return NextResponse.json(
-      { message: "Sign-in is temporarily unavailable. Please try again." },
-      { status: 503 },
+      { message: error instanceof RequestError ? error.message : "Sign-in is temporarily unavailable. Please try again." },
+      { status: error instanceof RequestError ? error.status : 503 },
     );
   }
 }

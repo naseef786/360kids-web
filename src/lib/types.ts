@@ -20,6 +20,8 @@ export type Session = {
   allocated: number;
 };
 export type Activity = {
+  is_saved?: boolean;
+  version: number;
   id: string;
   provider_id: string;
   provider_name: string;
@@ -86,18 +88,27 @@ export type Operations = {
   financeEnabled: boolean;
   whatsappEnabled: boolean;
 };
-export const money = (fils: number) =>
-  new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED" }).format(
+export const money = (fils: number, locale: "en" | "ar" = "en") =>
+  new Intl.NumberFormat(locale === "ar" ? "ar-AE" : "en-AE", { style: "currency", currency: "AED" }).format(
     fils / 100,
   );
-export const dateTime = (value: string) =>
-  new Intl.DateTimeFormat("en-AE", {
+export const dateTime = (value: string, locale: "en" | "ar" = "en") =>
+  new Intl.DateTimeFormat(locale === "ar" ? "ar-AE" : "en-AE", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "Asia/Dubai",
   }).format(new Date(value));
-export const stateLabel = (state: string) =>
-  ({
+export const stateLabel = (state: string, locale: "en" | "ar" = "en") =>
+  (locale === "ar" ? {
+    REQUESTED: "بانتظار المزود",
+    OFFER_PENDING: "العرض جاهز",
+    PAYMENT_DUE: "بانتظار الدفع",
+    PAYMENT_CHECKING: "الدفع قيد المراجعة",
+    CONFIRMED: "مؤكد",
+    DECLINED: "مرفوض",
+    EXPIRED: "منتهي",
+    CANCELLED: "ملغى",
+  } : {
     REQUESTED: "Awaiting provider",
     OFFER_PENDING: "Offer ready",
     PAYMENT_DUE: "Awaiting payment",
@@ -106,4 +117,4 @@ export const stateLabel = (state: string) =>
     DECLINED: "Declined",
     EXPIRED: "Expired",
     CANCELLED: "Cancelled",
-  })[state] ?? state;
+  })[state as "REQUESTED"] ?? state;

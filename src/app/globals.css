@@ -74,6 +74,89 @@ select {
   border-radius: var(--radius-input);
   font-size: 14px;
 }
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-inline: 14px 44px;
+  border-color: #c9d6d9;
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--secondary) 50%),
+    linear-gradient(135deg, var(--secondary) 50%, transparent 50%),
+    linear-gradient(to bottom, #e7efef, #e7efef);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 13px) 50%,
+    calc(100% - 38px) 50%;
+  background-size:
+    5px 5px,
+    5px 5px,
+    1px 22px;
+  background-repeat: no-repeat;
+  box-shadow:
+    0 1px 2px #172b3a0a,
+    0 4px 12px #172b3a08;
+  font-weight: 600;
+  line-height: 1.35;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+select:hover:not(:disabled) {
+  border-color: #81b8bd;
+  background-color: #fbfefe;
+  box-shadow:
+    0 1px 2px #172b3a0a,
+    0 6px 16px #087f8c12;
+}
+select:open {
+  border-color: var(--secondary);
+  background-color: var(--pale-aqua);
+  box-shadow: 0 0 0 3px #087f8c1f;
+}
+select:focus-visible {
+  border-color: var(--secondary);
+  outline: 3px solid #087f8c33;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px var(--secondary);
+}
+select:disabled {
+  cursor: not-allowed;
+  color: #738187;
+  border-color: #e3e9eb;
+  background-color: #f3f6f6;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #8b989c 50%),
+    linear-gradient(135deg, #8b989c 50%, transparent 50%),
+    linear-gradient(to bottom, #e1e7e9, #e1e7e9);
+  box-shadow: none;
+  opacity: 1;
+}
+select:invalid {
+  color: var(--supporting-text);
+}
+select option {
+  color: var(--text);
+  background: var(--surface);
+  font-weight: 500;
+}
+select[multiple],
+select[size]:not([size="1"]) {
+  cursor: default;
+  padding: 10px 12px;
+  background-image: none;
+}
+@media (forced-colors: active) {
+  select {
+    appearance: auto;
+    padding-inline: 12px;
+    background-image: none;
+    border: 1px solid ButtonText;
+    box-shadow: none;
+  }
+}
 input::placeholder {
   color: #687980;
 }
@@ -86,10 +169,16 @@ label {
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
-select:focus-visible,
 summary:focus-visible {
   outline: 3px solid var(--secondary);
   outline-offset: 4px;
+}
+[dir="rtl"] select {
+  padding-inline: 44px 14px;
+  background-position:
+    18px 50%,
+    13px 50%,
+    38px 50%;
 }
 main:focus {
   outline: none;

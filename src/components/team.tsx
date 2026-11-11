@@ -1,44 +1,50 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Member, Page, Provider } from "@/lib/types";
 import { request, errorMessage } from "@/lib/client-api";
 import { MutationForm } from "./mutations";
 export function Team({
   organizations,
-  accountId,
 }: {
   organizations: Page<Provider>;
-  accountId: string;
 }) {
   const [providers, setProviders] = useState(organizations),
     [providerId, setProviderId] = useState(""),
     [members, setMembers] = useState<Page<Member> | null>(null),
     [error, setError] = useState(""),
-    [loading, setLoading] = useState(false);
+    [loading, setLoading] = useState(false),
+    [loadingProviders,setLoadingProviders] = useState(false);
+  const memberRequest = useRef(0), providerRequest = useRef(0), chosen = useRef("");
   async function load(id: string, page = 1) {
-    setLoading(true);
+    if(id !== chosen.current) return;
+    const ticket = ++memberRequest.current;
+    setMembers(null);
     setError("");
+    if(!id) { setLoading(false); return; }
+    setLoading(true);
     try {
-      setMembers(
-        await request(`/providers/${id}/members?page=${page}&pageSize=10`),
-      );
-    } catch (e) {
-      setMembers(null);
-      setError(errorMessage(e));
-    } finally {
-      setLoading(false);
-    }
+      const result = await request<Page<Member>>(`/providers/${id}/members?page=${page}&pageSize=10`);
+      if(ticket === memberRequest.current) setMembers(result);
+    } catch(e) {
+      if(ticket === memberRequest.current) setError(errorMessage(e));
+    } finally { if(ticket === memberRequest.current) setLoading(false); }
   }
   async function providerPage(page: number) {
+    const ticket = ++providerRequest.current;
+    setLoadingProviders(true);
+    setError("");
     try {
-      setProviders(
-        await request(
-          `/providers?owned=true&status=approved&page=${page}&pageSize=20`,
-        ),
-      );
-    } catch (e) {
-      setError(errorMessage(e));
-    }
+      const result = await request<Page<Provider>>(`/providers?owned=true&status=approved&page=${page}&pageSize=20`);
+      if(ticket !== providerRequest.current) return;
+      setProviders(result);
+      setProviderId("");
+      chosen.current = "";
+      memberRequest.current++;
+      setMembers(null);
+      setLoading(false);
+    } catch(e) {
+      if(ticket === providerRequest.current) setError(errorMessage(e));
+    } finally { if(ticket === providerRequest.current) setLoadingProviders(false); }
   }
   return (
     <div className="stack">
@@ -46,18 +52,16 @@ export function Team({
         <label>
           Organization
           <select
+            disabled={loadingProviders}
             value={providerId}
             onChange={(e) => {
+              chosen.current = e.target.value;
               setProviderId(e.target.value);
               load(e.target.value);
             }}
           >
             <option value="">Choose an organization you own</option>
-            {providers.items
-              .filter(
-                (p) => p.owner_id === accountId && p.status === "approved",
-              )
-              .map((p) => (
+            {providers.items.map((p) => (
                 <option value={p.id} key={p.id}>
                   {p.name}
                 </option>
@@ -68,6 +72,7 @@ export function Team({
           {providers.page > 1 && (
             <button
               className="btn outline small"
+              disabled={loadingProviders}
               onClick={() => providerPage(providers.page - 1)}
             >
               Previous organizations
@@ -76,6 +81,7 @@ export function Team({
           {providers.page < providers.pages && (
             <button
               className="btn outline small"
+              disabled={loadingProviders}
               onClick={() => providerPage(providers.page + 1)}
             >
               More organizations
@@ -87,6 +93,7 @@ export function Team({
           already exist.
         </p>
       </section>
+      {!providers.total && <p className="notice">You do not own an approved organization. Staff access is managed by the organization owner.</p>}
       {loading && <p role="status">Loading team…</p>}
       {error && (
         <p role="alert" className="notice error">
@@ -99,6 +106,7 @@ export function Team({
             <h2>Add or reactivate staff</h2>
             <div className="section-gap">
               <MutationForm
+                key={providerId}
                 label="Grant staff access"
                 onSuccess={() => load(providerId)}
                 reset
@@ -160,6 +168,7 @@ export function Team({
               {members.page > 1 && (
                 <button
                   className="btn outline small"
+                  disabled={loading}
                   onClick={() => load(providerId, members.page - 1)}
                 >
                   Previous
@@ -168,6 +177,7 @@ export function Team({
               {members.page < members.pages && (
                 <button
                   className="btn outline small"
+                  disabled={loading}
                   onClick={() => load(providerId, members.page + 1)}
                 >
                   Next

@@ -18,7 +18,9 @@ interface Feed {
   items: Notice[];
   unread: number;
   total: number;
-  nextBefore: string | null;
+  page: number;
+  pageSize: number;
+  pages: number;
 }
 type Status =
   | "connecting"
@@ -238,34 +240,17 @@ export default function RealtimeNotifications({
       setBusy(false);
     }
   }
-  async function more() {
-    if (!feed?.nextBefore) return;
-    const version = feedVersion.current;
+  async function goToPage(page: number) {
+    const version = ++feedVersion.current;
     setBusy(true);
+    setError("");
     try {
-      const next = await api<Feed>(
-        "/notifications?before=" + encodeURIComponent(feed.nextBefore),
-      );
-      if (mounted.current && version === feedVersion.current)
-        setFeed((current) =>
-          current
-            ? {
-                ...next,
-                items: [
-                  ...new Map(
-                    [...current.items, ...next.items].map((n) => [n.id, n]),
-                  ).values(),
-                ],
-              }
-            : next,
-        );
+      const next = await api<Feed>(`/notifications?page=${page}&pageSize=20`);
+      if (mounted.current && version === feedVersion.current) setFeed(next);
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Unable to load older notifications.",
-      );
-    } finally {
-      setBusy(false);
-    }
+      if (mounted.current && version === feedVersion.current)
+        setError(e instanceof Error ? e.message : "Unable to load notifications.");
+    } finally { if (mounted.current) setBusy(false); }
   }
   const destination = (notice: Notice) =>
     notificationHref(notice, profile.role);
@@ -367,10 +352,12 @@ export default function RealtimeNotifications({
               </li>
             ))}
           </ol>
-          {feed?.nextBefore && (
-            <button disabled={busy} onClick={() => void more()}>
-              Load older updates
-            </button>
+          {feed && feed.pages > 0 && (
+            <nav aria-label="Notification pages">
+              <button disabled={busy || feed.page <= 1} onClick={() => void goToPage(feed.page - 1)}>Previous</button>
+              <span aria-live="polite">Page {feed.page} of {feed.pages}</span>
+              <button disabled={busy || feed.page >= feed.pages} onClick={() => void goToPage(feed.page + 1)}>Next</button>
+            </nav>
           )}
         </section>
       </details>

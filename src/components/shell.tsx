@@ -1,13 +1,26 @@
 import Image from "next/image";
 import Link from "next/link";
-import { WorkspaceNav, ParentMobileNav } from "./workspace-nav";
+import {
+  WorkspaceNav,
+  ParentMobileNav,
+  type WorkspaceLink,
+} from "./workspace-nav";
 import { SignOut } from "./account-controls";
+import { NotificationLink } from "./notification-controls";
+import { LanguageSwitcher } from "./language-switcher";
+import { serverDictionary } from "@/lib/server-locale";
+import type { Locale, ShellDictionary } from "@/lib/i18n";
 import type { Identity, Page } from "@/lib/types";
 import "./workspace.css";
 import "./connected.css";
-export function Brand() {
+
+export function Brand({
+  homeLabel = "360 Kids Activity home",
+}: {
+  homeLabel?: string;
+}) {
   return (
-    <Link className="brand" href="/" aria-label="360 Kids Activity home">
+    <Link className="brand" href="/" aria-label={homeLabel}>
       <Image
         src="/brand/360-kids-logo.webp"
         alt=""
@@ -21,36 +34,62 @@ export function Brand() {
     </Link>
   );
 }
-export function Header({ actor }: { actor?: Identity | null }) {
+
+export function Header({
+  actor,
+  role = "parent",
+  locale,
+  dictionary,
+}: {
+  actor?: Identity | null;
+  role?: "parent" | "partner" | "admin";
+  locale: Locale;
+  dictionary: ShellDictionary;
+}) {
   return (
     <header className="app-header">
-      <Brand />
-      <nav className="public-nav" aria-label="Website">
-        <Link href="/parent/activities">Explore</Link>
-        <Link href="/#categories">Categories</Link>
-        <Link href="/#how-it-works">How it works</Link>
+      <Brand homeLabel={dictionary.brandHome} />
+      <nav className="public-nav" aria-label={dictionary.website}>
+        <Link href="/parent/activities">{dictionary.explore}</Link>
+        <Link href="/#categories">{dictionary.categories}</Link>
+        <Link href="/#how-it-works">{dictionary.howItWorks}</Link>
       </nav>
       <div className="header-actions">
+        <LanguageSwitcher locale={locale} label={dictionary.language} />
         {actor ? (
           <>
-            <nav className="role-links" aria-label="Your workspaces">
-              <Link href="/parent">Parent</Link>
+            <nav
+              className="role-links"
+              aria-label={dictionary.workspaceNavigation}
+            >
+              <Link href="/parent">{dictionary.parent}</Link>
               {actor.roles.includes("partner") && (
-                <Link href="/partner">Partner</Link>
+                <Link href="/partner">{dictionary.partner}</Link>
               )}
               {actor.roles.includes("superadmin") && (
-                <Link href="/admin">Superadmin</Link>
+                <Link href="/admin">{dictionary.superadmin}</Link>
               )}
             </nav>
-            <SignOut />
+            <NotificationLink
+              key={actor.id}
+              href={`/${role}/notifications`}
+              label={dictionary.updates}
+              unavailableLabel={dictionary.updatesUnavailable}
+              retryLabel={dictionary.retry}
+            />
+            <SignOut
+              locale={locale}
+              label={dictionary.signOut}
+              pendingLabel={dictionary.signingOut}
+            />
           </>
         ) : (
           <>
             <Link className="btn outline" href="/login">
-              Sign in
+              {dictionary.signIn}
             </Link>
             <Link className="btn" href="/partner/apply">
-              Become a partner
+              {dictionary.becomePartner}
             </Link>
           </>
         )}
@@ -58,15 +97,24 @@ export function Header({ actor }: { actor?: Identity | null }) {
     </header>
   );
 }
-export function Footer() {
+
+export function Footer({ dictionary }: { dictionary: ShellDictionary }) {
   return (
     <footer className="app-footer">
-      <span>360 Kids Activity · Explore. Play. Grow.</span>
-      <span>Dubai, United Arab Emirates</span>
+      <span>{dictionary.footer.tagline}</span>
+      <span>{dictionary.footer.location}</span>
+      <nav aria-label={dictionary.footer.information}>
+        <Link href="/about">{dictionary.footer.about}</Link>{" · "}
+        <Link href="/contact">{dictionary.footer.contact}</Link>{" · "}
+        <Link href="/faq">{dictionary.footer.faq}</Link>{" · "}
+        <Link href="/terms">{dictionary.footer.terms}</Link>{" · "}
+        <Link href="/privacy">{dictionary.footer.privacy}</Link>
+      </nav>
     </footer>
   );
 }
-export function Shell({
+
+export async function Shell({
   actor,
   role = "parent",
   children,
@@ -77,56 +125,145 @@ export function Shell({
   children: React.ReactNode;
   publicPage?: boolean;
 }) {
-  const links =
+  const { locale, dictionary } = await serverDictionary();
+  const links: WorkspaceLink[] =
     role === "parent"
       ? [
-          ["Overview", "/parent"],
-          ["Explore activities", "/parent/activities"],
-          ["My bookings", "/parent/bookings"],
-          ["Children & account", "/parent/profile"],
-          ["Saved activities", "/parent/saved"],
-          ["Become a partner", "/partner/apply"],
+          { label: dictionary.nav.overview, href: "/parent", icon: "home" },
+          {
+            label: dictionary.nav.exploreActivities,
+            href: "/parent/activities",
+            icon: "search",
+          },
+          {
+            label: dictionary.nav.myBookings,
+            href: "/parent/bookings",
+            icon: "calendar",
+          },
+          {
+            label: dictionary.nav.childrenAccount,
+            href: "/parent/profile",
+            icon: "person",
+          },
+          {
+            label: dictionary.nav.savedActivities,
+            href: "/parent/saved",
+            icon: "heart",
+          },
+          {
+            label: dictionary.nav.support,
+            href: "/parent/support",
+            icon: "grid",
+          },
+          {
+            label: dictionary.becomePartner,
+            href: "/partner/apply",
+            icon: "grid",
+          },
         ]
       : role === "partner"
         ? [
-            ["Requests", "/partner"],
-            ["Listings", "/partner/programs"],
-            ["My organizations", "/partner/organizations"],
-            ["Team access", "/partner/team"],
+            {
+              label: dictionary.nav.requests,
+              href: "/partner",
+              icon: "calendar",
+            },
+            {
+              label: dictionary.nav.listings,
+              href: "/partner/programs",
+              icon: "grid",
+            },
+            {
+              label: dictionary.nav.organizations,
+              href: "/partner/organizations",
+              icon: "home",
+            },
+            {
+              label: dictionary.nav.teamAccess,
+              href: "/partner/team",
+              icon: "person",
+            },
+            {
+              label: dictionary.nav.support,
+              href: "/partner/support",
+              icon: "grid",
+            },
           ]
         : [
-            ["Overview", "/admin"],
-            ["Provider reviews", "/admin/partners"],
-            ["Catalogue", "/admin/programs"],
-            ["All bookings", "/admin/bookings"],
-            ["Corrections & audit", "/admin/operations"],
+            { label: dictionary.nav.overview, href: "/admin", icon: "home" },
+            {
+              label: dictionary.nav.providerReviews,
+              href: "/admin/partners",
+              icon: "person",
+            },
+            {
+              label: dictionary.nav.catalogue,
+              href: "/admin/programs",
+              icon: "grid",
+            },
+            {
+              label: dictionary.nav.allBookings,
+              href: "/admin/bookings",
+              icon: "calendar",
+            },
+            {
+              label: dictionary.nav.correctionsAudit,
+              href: "/admin/operations",
+              icon: "check",
+            },
+            {
+              label: dictionary.nav.supportRequests,
+              href: "/admin/support",
+              icon: "grid",
+            },
+            {
+              label: dictionary.nav.websiteContent,
+              href: "/admin/content",
+              icon: "grid",
+            },
           ];
+  const navigation: WorkspaceLink[] = [
+    ...links,
+    {
+      label: dictionary.notifications,
+      href: `/${role}/notifications`,
+      icon: "grid",
+    },
+  ];
   return (
     <div className="platform">
       <a className="skip-link" href="#main">
-        Skip to content
+        {dictionary.skip}
       </a>
-      <Header actor={actor} />
+      <Header
+        actor={actor}
+        role={role}
+        locale={locale}
+        dictionary={dictionary}
+      />
       <div className={publicPage ? "discovery-main" : "workspace-layout"}>
         {!publicPage && (
           <aside className="workspace-sidebar">
             <p className="sidebar-label">
               {role === "parent"
-                ? "YOUR FAMILY"
+                ? dictionary.familyLabel
                 : role === "partner"
-                  ? "PARTNER WORKSPACE"
-                  : "SUPERADMIN"}
+                  ? dictionary.partnerLabel
+                  : dictionary.adminLabel}
             </p>
-            <WorkspaceNav links={links} />
+            <WorkspaceNav
+              links={navigation}
+              label={dictionary.workspaceNavigation}
+            />
             {actor && (
               <div className="sidebar-foot">
                 <div>
                   <b>
                     {role === "parent"
-                      ? "Your family"
+                      ? dictionary.familyAccount
                       : role === "partner"
-                        ? "Partner account"
-                        : "Platform team"}
+                        ? dictionary.partnerAccount
+                        : dictionary.platformTeam}
                   </b>
                   <small>{actor.email}</small>
                 </div>
@@ -140,17 +277,44 @@ export function Shell({
           tabIndex={-1}
         >
           <p className="preview-notice">
-            <span>Development</span>Use fictional family details while we
-            prepare for launch.
+            <span>{dictionary.development}</span>
+            {dictionary.preview}
           </p>
           {children}
-          <Footer />
+          <Footer dictionary={dictionary} />
         </main>
       </div>
-      {role === "parent" && <ParentMobileNav />}
+      {role === "parent" && (
+        <ParentMobileNav
+          label={dictionary.parentNavigation}
+          items={[
+            {
+              label: dictionary.explore,
+              href: "/parent/activities",
+              icon: "home",
+            },
+            {
+              label: dictionary.nav.saved,
+              href: "/parent/saved",
+              icon: "heart",
+            },
+            {
+              label: dictionary.nav.bookings,
+              href: "/parent/bookings",
+              icon: "calendar",
+            },
+            {
+              label: dictionary.nav.profile,
+              href: "/parent/profile",
+              icon: "person",
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }
+
 export function Title({
   title,
   note,
@@ -170,6 +334,7 @@ export function Title({
     </div>
   );
 }
+
 export function Empty({
   title,
   note,
@@ -190,32 +355,65 @@ export function Empty({
     </div>
   );
 }
+
 export function Pager({
   data,
   query = {},
   base,
+  labels = {
+    pagination: "Pagination",
+    result: "result",
+    results: "results",
+    page: "Page",
+    of: "of",
+    unavailable: "This page is no longer available",
+    previous: "Previous",
+    next: "Next",
+    back: "Back to results",
+  },
 }: {
   data: Page<unknown>;
   query?: Record<string, string>;
   base: string;
+  labels?: {
+    pagination: string;
+    result: string;
+    results: string;
+    page: string;
+    of: string;
+    unavailable: string;
+    previous: string;
+    next: string;
+    back: string;
+  };
 }) {
   const link = (page: number) =>
     `${base}?${new URLSearchParams({ ...query, page: String(page), pageSize: String(data.pageSize) })}`;
   return (
-    <nav className="pagination" aria-label="Pagination">
+    <nav className="pagination" aria-label={labels.pagination}>
       <span role="status">
-        {data.total} {data.total === 1 ? "result" : "results"} · Page{" "}
-        {data.page} of {Math.max(1, data.pages)}
+        {data.total} {data.total === 1 ? labels.result : labels.results} · {labels.page}{" "}
+        {data.page} {labels.of} {Math.max(1, data.pages)}
+        {data.page > Math.max(1, data.pages) &&
+          ` · ${labels.unavailable}`}
       </span>
       <div>
         {data.page > 1 && (
           <Link className="btn outline small" href={link(data.page - 1)}>
-            Previous
+            {labels.previous}
           </Link>
         )}
         {data.page < data.pages && (
           <Link className="btn outline small" href={link(data.page + 1)}>
-            Next
+            {labels.next}
+          </Link>
+        )}
+        {data.page > Math.max(1, data.pages) && (
+          <Link
+            className="btn outline small"
+            href={link(Math.max(1, data.pages))}
+          >
+            {labels.back}
           </Link>
         )}
       </div>

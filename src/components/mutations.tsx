@@ -2,7 +2,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { request, errorMessage } from "@/lib/client-api";
+import { request, errorMessage, RequestError } from "@/lib/client-api";
 import type {
   Activity,
   Booking,
@@ -12,6 +12,8 @@ import type {
   Session,
 } from "@/lib/types";
 import { money, dateTime } from "@/lib/types";
+import type { Locale } from "@/lib/i18n";
+import type { ParentCopy } from "@/lib/parent-copy";
 export function MutationForm({
   children,
   submit,
@@ -19,24 +21,35 @@ export function MutationForm({
   reset = false,
   label = "Save",
   className = "form-stack",
+  disabled = false,
+  intent,
+  pendingLabel = "Saving…",
+  successMessage = "Saved successfully.",
 }: {
   children: React.ReactNode;
   submit: (data: FormData, key: string) => Promise<unknown>;
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
   reset?: boolean;
   label?: string;
   className?: string;
+  disabled?: boolean;
+  intent?: unknown;
+  pendingLabel?: string;
+  successMessage?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false),
     [error, setError] = useState(""),
     [success, setSuccess] = useState(false);
   const retry = useRef<{ fingerprint: string; key: string } | null>(null);
+  const sending = useRef(false);
   async function handle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if(sending.current || disabled) return;
+    sending.current = true;
     const form = event.currentTarget,
       data = new FormData(form),
-      fingerprint = JSON.stringify([...data]);
+      fingerprint = JSON.stringify([[...data], intent]);
     if (retry.current?.fingerprint !== fingerprint)
       retry.current = { fingerprint, key: crypto.randomUUID() };
     setPending(true);
@@ -48,17 +61,18 @@ export function MutationForm({
       if (reset) form.reset();
       setSuccess(true);
       router.refresh();
-      onSuccess?.();
+      await onSuccess?.();
     } catch (e) {
+      if(e instanceof RequestError && e.status < 500 && ![408,429].includes(e.status)) retry.current = null;
       setError(errorMessage(e));
-      router.refresh();
     } finally {
+      sending.current = false;
       setPending(false);
     }
   }
   return (
-    <form className={className} onSubmit={handle}>
-      <fieldset disabled={pending} className="form-fields">
+    <form className={className} onSubmit={handle} aria-busy={pending}>
+      <fieldset disabled={pending || disabled} className="form-fields">
         {children}
       </fieldset>
       {error && (
@@ -68,11 +82,11 @@ export function MutationForm({
       )}
       {success && (
         <p className="notice success" role="status">
-          Saved successfully.
+          {successMessage}
         </p>
       )}
-      <button className="btn" disabled={pending}>
-        {pending ? "Saving…" : label}
+      <button className="btn" disabled={pending || disabled}>
+        {pending ? pendingLabel : label}
       </button>
     </form>
   );
@@ -86,7 +100,8 @@ export function SaveButton({
 }) {
   const [saved, setSaved] = useState(initial),
     [pending, setPending] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [needsSignIn,setNeedsSignIn] = useState(false);
   const router = useRouter();
   return (
     <div>
@@ -97,11 +112,13 @@ export function SaveButton({
         onClick={async () => {
           setPending(true);
           setError("");
+          setNeedsSignIn(false);
           try {
             await request(`/saved/${id}`, "PUT", { saved: !saved });
             setSaved(!saved);
             router.refresh();
           } catch (e) {
+            setNeedsSignIn(e instanceof RequestError && e.status === 401);
             setError(errorMessage(e));
           } finally {
             setPending(false);
@@ -112,7 +129,7 @@ export function SaveButton({
       </button>
       {error && (
         <p role="alert" className="notice error">
-          {error} <Link href="/login">Sign in</Link>
+          {error} {needsSignIn && <Link href={`/login?next=${encodeURIComponent(`/activities/${id}`)}`}>Sign in</Link>}
         </p>
       )}
     </div>
@@ -203,11 +220,15 @@ export function BookingRequest({
   childrenPage,
   sessionsPage,
   signedIn,
+  locale,
+  copy,
 }: {
   activity: Activity;
   childrenPage: Page<Child> | null;
   sessionsPage: Page<Session>;
   signedIn: boolean;
+  locale: Locale;
+  copy: ParentCopy["request"];
 }) {
   const router = useRouter();
   const [children, setChildren] = useState(childrenPage),
@@ -235,12 +256,12 @@ export function BookingRequest({
   if (!signedIn)
     return (
       <aside className="panel booking-form">
-        <h2>Make room for discovery</h2>
+        <h2>{copy.signInIntroTitle}</h2>
         <p className="record-meta">
-          Sign in to choose your children and request a place.
+          {copy.signInIntro}
         </p>
         <Link className="btn" href={`/login?next=/activities/${activity.id}`}>
-          Sign in to request
+          {copy.signIn}
         </Link>
       </aside>
     );
@@ -257,32 +278,42 @@ export function BookingRequest({
   }
   return (
     <aside className="panel booking-form">
-      <h2>Request a place</h2>
-      <p className="record-meta">From {money(activity.price_fils)} per child</p>
+      <h2>{copy.title}</h2>
+      <p className="record-meta">
+        {copy.from} {money(activity.price_fils, locale)} {copy.perChild}
+      </p>
+      <p className="fine-print">
+        {copy.providerConfirmation} {copy.platformHoldNote}
+      </p>
       {!sessions.length ? (
-        <p className="notice">No sessions are currently accepting requests.</p>
+        <div><p className="notice">{copy.noSessions}</p>
+          {sessionPage.page > 1 && <button type="button" className="btn outline" disabled={loading} onClick={() => void loadSessions(1)}>{copy.backToSessions}</button>}
+        </div>
       ) : !children?.total ? (
         <>
           <p className="notice">
-            Add a fictional child profile to try this activity.
+            {copy.addChildNotice}
           </p>
           <Link className="btn" href="/parent/profile">
-            Add a child
+            {copy.addChild}
           </Link>
         </>
       ) : (
         <MutationForm
-          label="Send booking request"
+          label={copy.send}
+          disabled={loading}
+          intent={{selected,activityVersion:activity.version,sessionId}}
           onSuccess={() => {
             router.push("/parent/bookings");
           }}
           submit={(data, key) => {
-            if (!selected.length) throw new Error("Choose at least one child.");
+            if (!selected.length) throw new Error(copy.chooseChildError);
             return request(
               "/bookings",
               "POST",
               {
                 sessionId: data.get("sessionId"),
+                activityVersion: activity.version,
                 childIds: selected,
                 policyAccepted: data.get("policyAccepted") === "on",
               },
@@ -291,7 +322,7 @@ export function BookingRequest({
           }}
         >
           <label>
-            Choose a session
+            {copy.chooseSession}
             <select
               name="sessionId"
               required
@@ -299,7 +330,7 @@ export function BookingRequest({
               onChange={(e) => setSessionId(e.target.value)}
             >
               <option value="" disabled>
-                Select date and time
+                {copy.selectDate}
               </option>
               {sessions.map((s) => (
                 <option
@@ -307,8 +338,10 @@ export function BookingRequest({
                   value={s.id}
                   disabled={s.capacity - s.allocated < 1}
                 >
-                  {dateTime(s.starts_at)} ·{" "}
-                  {Math.max(0, s.capacity - s.allocated)} places
+                  {dateTime(s.starts_at, locale)} ·{" "}
+                  {s.capacity - s.allocated < 1
+                    ? copy.requestsClosed
+                    : copy.providerConfirms}
                 </option>
               ))}
             </select>
@@ -324,7 +357,7 @@ export function BookingRequest({
                   loadSessions(sessionPage.page - 1);
                 }}
               >
-                Previous sessions
+                {copy.previousSessions}
               </button>
             )}
             {sessionPage.page < sessionPage.pages && (
@@ -337,14 +370,14 @@ export function BookingRequest({
                   loadSessions(sessionPage.page + 1);
                 }}
               >
-                More sessions
+                {copy.moreSessions}
               </button>
             )}
           </div>
           <div>
-            <h3>Who’s joining?</h3>
+            <h3>{copy.joining}</h3>
             <p className="fine-print">
-              {selected.length} selected · Up to 10 children per request.
+              {selected.length} {copy.selected} · {copy.selectionLimit}
             </p>
             <div className="check-list">
               {children.items.map((child) => (
@@ -375,7 +408,7 @@ export function BookingRequest({
                   disabled={loading}
                   onClick={() => childPage(children.page - 1)}
                 >
-                  Previous children
+                  {copy.previousChildren}
                 </button>
               )}
               {children.page < children.pages && (
@@ -385,7 +418,7 @@ export function BookingRequest({
                   disabled={loading}
                   onClick={() => childPage(children.page + 1)}
                 >
-                  More children
+                  {copy.moreChildren}
                 </button>
               )}
             </div>
@@ -397,20 +430,19 @@ export function BookingRequest({
           </div>
           <p>
             <strong>
-              Estimated total: {money(activity.price_fils * selected.length)}
+              {copy.estimatedTotal}: {money(activity.price_fils * selected.length, locale)}
             </strong>
           </p>
           <p className="fine-print">
-            The provider reviews your request. Sending it does not reserve or
-            confirm a place.
+            {copy.noReservation}
           </p>
           <details>
-            <summary>Cancellation policy</summary>
+            <summary>{copy.cancellationPolicy}</summary>
             <p className="details-policy">{activity.policy}</p>
           </details>
           <label className="check-row">
             <input type="checkbox" name="policyAccepted" required />
-            <span>I accept this activity’s cancellation policy.</span>
+            <span>{copy.acceptPolicy}</span>
           </label>
         </MutationForm>
       )}
@@ -421,10 +453,14 @@ export function BookingActions({
   booking,
   mode,
   finance = false,
+  locale = "en",
+  copy,
 }: {
   booking: Booking;
   mode: "parent" | "partner" | "admin";
   finance?: boolean;
+  locale?: Locale;
+  copy?: ParentCopy["booking"];
 }) {
   const active = !["CANCELLED", "EXPIRED", "DECLINED"].includes(booking.state);
   const provider = mode !== "parent";
@@ -493,25 +529,25 @@ export function BookingActions({
       )}
       {mode === "parent" && booking.state === "OFFER_PENDING" && (
         <MutationForm
-          label={`Accept offer · ${money(booking.offer?.amountFils ?? booking.amount_fils)}`}
+          label={`${copy?.acceptOffer ?? "Accept offer"} · ${money(booking.offer?.amountFils ?? booking.amount_fils, locale)}`}
           submit={submit("accept-offer")}
         >
           <p className="fine-print">
-            Accept the revised total and proceed to the payment stage.
+            {copy?.acceptOfferNote ?? "Accept the revised total and proceed to the payment stage."}
           </p>
         </MutationForm>
       )}
       {booking.state === "PAYMENT_DUE" && (
         <p className="notice">
           {finance
-            ? "Payment is due by the deadline below."
-            : "Payment collection is not enabled during development. No money should be transferred."}
+            ? copy?.paymentDueNotice ?? "Payment is due by the deadline shown above."
+            : copy?.paymentDisabledNotice ?? "Payment collection is not enabled during development. No money should be transferred."}
         </p>
       )}
       {mode === "parent" && finance && booking.state === "PAYMENT_DUE" && (
-        <MutationForm label="Submit reference" submit={submit("proof")}>
+        <MutationForm label={copy?.submitReference ?? "Submit reference"} submit={submit("proof")}>
           <label>
-            Payment reference
+            {copy?.paymentReference ?? "Payment reference"}
             <input name="reference" minLength={3} maxLength={200} required />
           </label>
         </MutationForm>
@@ -528,10 +564,10 @@ export function BookingActions({
         (provider ||
           !["CONFIRMED", "PAYMENT_CHECKING"].includes(booking.state)) && (
           <details>
-            <summary>Cancel this request</summary>
-            <MutationForm label="Cancel request" submit={submit("cancel")}>
+            <summary>{copy?.cancelThisRequest ?? "Cancel this request"}</summary>
+            <MutationForm label={copy?.cancelRequest ?? "Cancel request"} submit={submit("cancel")}>
               <label>
-                Cancellation reason
+                {copy?.cancellationReason ?? "Cancellation reason"}
                 <textarea
                   name="reason"
                   minLength={1}
@@ -647,23 +683,30 @@ export function ActivityForm({
 }) {
   const [page, setPage] = useState(providers),
     [error, setError] = useState(""),
-    [selected, setSelected] = useState("");
+    [selected, setSelected] = useState(""),
+    [loading,setLoading] = useState(false);
+  const sequence = useRef(0);
   async function load(pageNumber: number) {
+    const ticket = ++sequence.current;
+    setLoading(true);
     try {
-      setPage(
-        await request(
+      const next = await request<Page<Provider>>(
           `/providers?status=approved&page=${pageNumber}&pageSize=20`,
-        ),
-      );
+        );
+      if(ticket !== sequence.current) return;
+      setPage(next);
+      setSelected("");
       setError("");
     } catch (e) {
-      setError(errorMessage(e));
-    }
+      if(ticket === sequence.current) setError(errorMessage(e));
+    } finally { if(ticket === sequence.current) setLoading(false); }
   }
   return (
     <MutationForm
       label={admin ? "Create activity" : "Submit activity for review"}
       reset
+      disabled={loading}
+      onSuccess={() => setSelected("")}
       submit={(data) =>
         request("/activities", "POST", {
           providerId: selected,
@@ -696,9 +739,7 @@ export function ActivityForm({
             onChange={(e) => setSelected(e.target.value)}
           >
             <option value="">Choose an approved provider</option>
-            {page.items
-              .filter((p) => p.status === "approved")
-              .map((p) => (
+            {page.items.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>

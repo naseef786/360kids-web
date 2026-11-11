@@ -14,6 +14,13 @@ import type {
   Session,
 } from "@/lib/types";
 import { money, dateTime, stateLabel } from "@/lib/types";
+import { serverDictionary } from "@/lib/server-locale";
+import {
+  bookingStatusCopy,
+  parentCopy,
+  type ParentCopy,
+} from "@/lib/parent-copy";
+import type { Locale } from "@/lib/i18n";
 import { Empty, Pager, Shell, Title } from "./shell";
 import { CatalogueEditor } from "./catalogue-editor";
 import {
@@ -37,9 +44,13 @@ const photos: Record<string, string> = {
 };
 export function ActivityCards({
   items,
+  locale,
+  copy,
   saved = false,
 }: {
   items: Activity[];
+  locale: Locale;
+  copy: ParentCopy;
   saved?: boolean;
 }) {
   return (
@@ -48,7 +59,7 @@ export function ActivityCards({
         <article className="activity-card" key={a.id}>
           <Link
             className="activity-image"
-            aria-label={`View ${a.title}`}
+            aria-label={`${copy.viewActivity}: ${a.title}`}
             href={`/activities/${a.id}`}
           >
             <Image
@@ -69,18 +80,18 @@ export function ActivityCards({
             </p>
             <div className="activity-facts">
               <span>
-                Ages {a.min_age}–{a.max_age}
+                {copy.ages} {a.min_age}–{a.max_age}
               </span>
             </div>
             <div className="activity-commercial">
-              <span>Per child</span>
-              <strong>{money(a.price_fils)}</strong>
+              <span>{copy.perChild}</span>
+              <strong>{money(a.price_fils, locale)}</strong>
             </div>
             <div className="card-actions">
               <Link className="btn small" href={`/activities/${a.id}`}>
-                View activity
+                {copy.viewActivity}
               </Link>
-              <SaveButton id={a.id} initial={saved} />
+              <SaveButton key={`${a.id}-${saved || a.is_saved}`} id={a.id} initial={saved || a.is_saved} />
             </div>
           </div>
         </article>
@@ -88,69 +99,71 @@ export function ActivityCards({
     </div>
   );
 }
-export function Filters({ query }: { query: Record<string, string> }) {
+export function Filters({
+  query,
+  copy,
+}: {
+  query: Record<string, string>;
+  copy: ParentCopy;
+}) {
   return (
     <form className="panel live-filters" action="/parent/activities">
       <label>
-        Activity
+        {copy.activity}
         <input
           name="q"
           type="search"
-          placeholder="Find something they’ll love"
+          placeholder={copy.searchPlaceholder}
           defaultValue={query.q}
         />
       </label>
       <label>
-        Child’s age
+        {copy.childAge}
         <select name="age" defaultValue={query.age ?? ""}>
-          <option value="">All ages</option>
+          <option value="">{copy.allAges}</option>
           {Array.from({ length: 18 }, (_, i) => (
             <option key={i} value={i}>
-              {i} years
+              {i} {copy.years}
             </option>
           ))}
         </select>
       </label>
       <label>
-        Area
+        {copy.area}
         <input
           name="area"
-          placeholder="Any neighbourhood"
+          placeholder={copy.areaPlaceholder}
           defaultValue={query.area}
         />
       </label>
       <label>
-        Category
+        {copy.category}
         <select name="category" defaultValue={query.category ?? ""}>
-          <option value="">All activities</option>
+          <option value="">{copy.allActivities}</option>
           {Object.keys(photos).map((c) => (
             <option key={c}>{c}</option>
           ))}
         </select>
       </label>
-      <button className="btn">Explore activities</button>
+      <button className="btn">{copy.exploreActivities}</button>
     </form>
   );
 }
 export async function DiscoveryScreen() {
-  const [session, data] = await Promise.all([
-    identity(),
-    backend<Page<Activity>>("/activities?page=1&pageSize=3"),
-  ]);
+  const { locale } = await serverDictionary();
+  const copy = parentCopy[locale];
+  const session = await identity();
+  const data = await backend<Page<Activity>>("/activities?page=1&pageSize=3",session?.token);
   return (
     <Shell actor={session?.actor} publicPage>
       <section className="discovery-hero connected-hero">
         <div className="hero-copy">
-          <span className="eyebrow">A WORLD OF LITTLE POSSIBILITIES</span>
-          <h1>
-            Find their next
-            <br />
-            favourite activity
-          </h1>
-          <p>Classes, play and family experiences in Dubai</p>
+          <span className="eyebrow">{copy.heroEyebrow}</span>
+          <h1>{copy.heroTitle}</h1>
+          <p>{copy.heroText}</p>
           <div className="card-actions">
             <Link className="btn" href="/parent/activities">
-              Explore activities
+              {copy.exploreActivities}
             </Link>
           </div>
         </div>
@@ -180,9 +193,9 @@ export async function DiscoveryScreen() {
           <span>✦</span>
         </div>
       </section>
-      <Filters query={{}} />
+      <Filters query={{}} copy={copy} />
       <section className="discovery-section" id="categories">
-        <h2>Explore by category</h2>
+        <h2>{copy.exploreByCategory}</h2>
         <div className="category-grid">
           {Object.keys(photos).map((category, i) => (
             <Link
@@ -198,41 +211,41 @@ export async function DiscoveryScreen() {
       </section>
       <section className="discovery-section">
         <div className="section-heading">
-          <h2>Discover something new</h2>
+          <h2>{copy.discoverNew}</h2>
           <Link className="text-link" href="/parent/activities">
-            View all activities →
+            {copy.viewAll} →
           </Link>
         </div>
         <p className="section-note">
-          Explore published activities · Photography is illustrative.
+          {copy.photographyNote}
         </p>
         {data.total ? (
-          <ActivityCards items={data.items} />
+          <ActivityCards items={data.items} locale={locale} copy={copy} />
         ) : (
           <Empty
-            title="New adventures are on the way"
-            note="Approved activities will appear here as providers join."
+            title={copy.emptyActivitiesTitle}
+            note={copy.emptyActivitiesNote}
           />
         )}
       </section>
       <section className="discovery-section" id="how-it-works">
-        <h2>From discovery to a confirmed place</h2>
+        <h2>{copy.journeyTitle}</h2>
         <div className="how-grid">
           {[
             [
               "01",
-              "Request a place",
-              "Choose an activity, session and children. A request does not reserve a place.",
+              copy.requestPlace,
+              copy.requestPlaceNote,
             ],
             [
               "02",
-              "Review the response",
-              "Your provider checks availability and may propose a revised total.",
+              copy.reviewResponse,
+              copy.reviewResponseNote,
             ],
             [
               "03",
-              "Confirm your booking",
-              "Follow the agreed payment process. Confirmation is a separate step.",
+              copy.confirmBooking,
+              copy.confirmBookingNote,
             ],
           ].map(([n, t, d]) => (
             <article key={n}>
@@ -251,27 +264,27 @@ export async function CatalogueScreen({
 }: {
   searchParams: Search;
 }) {
-  const query = await pageQuery(searchParams);
-  const [session, data] = await Promise.all([
-    identity(),
-    backend<Page<Activity>>(`/activities?${new URLSearchParams(query)}`),
-  ]);
+  const { locale } = await serverDictionary();
+  const copy = parentCopy[locale];
+  const query = await pageQuery(searchParams, ["q","age","area","category"]);
+  const session = await identity();
+  const data = await backend<Page<Activity>>(`/activities?${new URLSearchParams(query)}`,session?.token);
   return (
     <Shell actor={session?.actor} publicPage>
       <Title
-        title="Explore activities"
-        note="Find the right fit for their age, interests and neighbourhood."
+        title={copy.exploreActivities}
+        note={copy.catalogueNote}
       />
-      <Filters query={query} />
+      <Filters query={query} copy={copy} />
       {data.items.length ? (
-        <ActivityCards items={data.items} />
+        <ActivityCards items={data.items} locale={locale} copy={copy} />
       ) : (
         <Empty
-          title="No matching activities"
-          note="Try another age, area or category."
+          title={copy.noMatches}
+          note={copy.noMatchesNote}
         >
           <Link className="btn outline" href="/parent/activities">
-            Clear filters
+            {copy.clearFilters}
           </Link>
         </Empty>
       )}
@@ -280,11 +293,11 @@ export async function CatalogueScreen({
   );
 }
 export async function ActivityScreen({ id }: { id: string }) {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const [session, a] = await Promise.all([
-    identity(),
-    backend<Activity>(`/activities/${id}`),
-  ]);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) notFound();
+  const { locale } = await serverDictionary();
+  const copy = parentCopy[locale];
+  const session = await identity();
+  const a = await backend<Activity>(`/activities/${id}`,session?.token);
   const children = session
     ? await backend<Page<Child>>("/children?page=1&pageSize=10", session.token)
     : null;
@@ -294,7 +307,7 @@ export async function ActivityScreen({ id }: { id: string }) {
   return (
     <Shell actor={session?.actor} publicPage>
       <Link className="text-link" href="/parent/activities">
-        ← All activities
+        ← {copy.allActivitiesBack}
       </Link>
       <Title title={a.title} note={`${a.provider_name} · ${a.area}`} />
       <div className="detail-grid">
@@ -302,38 +315,41 @@ export async function ActivityScreen({ id }: { id: string }) {
           <Image
             className="detail-cover"
             src={`/activities/${photos[a.category] ?? "discovery"}.jpg`}
-            alt="Illustrative activity photography"
+            alt={copy.illustrativePhoto}
             width={1024}
             height={600}
             priority
           />
           <div className="detail-info">
             <dl>
-              <dt>Ages</dt>
+              <dt>{copy.ages}</dt>
               <dd>
-                {a.min_age}–{a.max_age} years
+                {a.min_age}–{a.max_age} {copy.years}
               </dd>
-              <dt>Category</dt>
+              <dt>{copy.category}</dt>
               <dd>{a.category}</dd>
-              <dt>Per child</dt>
-              <dd>{money(a.price_fils)}</dd>
+              <dt>{copy.perChild}</dt>
+              <dd>{money(a.price_fils, locale)}</dd>
             </dl>
             <div>
-              <h2>About this activity</h2>
+              <h2>{copy.aboutActivity}</h2>
               <p className="section-gap">{a.description}</p>
             </div>
             <div>
-              <h2>Cancellation policy</h2>
+              <h2>{copy.cancellationPolicy}</h2>
               <p className="section-gap">{a.policy}</p>
             </div>
-            <SaveButton id={id} />
+            <SaveButton key={`${id}-${a.is_saved}`} id={id} initial={a.is_saved} />
           </div>
         </section>
         <BookingRequest
+          key={`${a.id}-${a.version}`}
           activity={a}
           childrenPage={children}
           sessionsPage={sessions}
           signedIn={Boolean(session)}
+          locale={locale}
+          copy={copy.request}
         />
       </div>
     </Shell>
@@ -341,9 +357,13 @@ export async function ActivityScreen({ id }: { id: string }) {
 }
 export function BookingCards({
   items,
+  locale,
+  copy,
   role = "parent",
 }: {
   items: Booking[];
+  locale: Locale;
+  copy: ParentCopy;
   role?: "parent" | "partner" | "admin";
 }) {
   return (
@@ -358,22 +378,22 @@ export function BookingCards({
             <span
               className={`badge ${b.state === "CONFIRMED" ? "green" : b.state === "REQUESTED" ? "orange" : "aqua"}`}
             >
-              {stateLabel(b.state)}
+              {stateLabel(b.state, locale)}
             </span>
           </div>
           <p className="record-meta">
-            {dateTime(b.snapshot.startsAt)} · Dubai time
+            {dateTime(b.snapshot.startsAt, locale)} · {copy.booking.dubaiTime}
           </p>
           <p className="record-meta">
-            {b.quantity} {b.quantity === 1 ? "child" : "children"} ·{" "}
-            {money(b.amount_fils)}
+            {b.quantity} {b.quantity === 1 ? copy.booking.child : copy.booking.children} ·{" "}
+            {money(b.amount_fils, locale)}
           </p>
           <div className="card-actions">
             <Link
               className="btn outline small"
               href={`/${role}/bookings/${b.id}`}
             >
-              View request
+              {copy.booking.viewRequest}
             </Link>
           </div>
         </article>
@@ -384,9 +404,11 @@ export function BookingCards({
 export function BookingTable({
   items,
   role,
+  locale = "en",
 }: {
   items: Booking[];
   role: "partner" | "admin";
+  locale?: Locale;
 }) {
   return (
     <div className="panel row-scroll">
@@ -414,11 +436,11 @@ export function BookingTable({
                 <strong>{b.snapshot.title}</strong>
                 <p className="fine-print">{b.snapshot.provider}</p>
               </td>
-              <td>{dateTime(b.snapshot.startsAt)}</td>
+              <td>{dateTime(b.snapshot.startsAt, locale)}</td>
               <td>{b.quantity}</td>
-              <td>{money(b.amount_fils)}</td>
+              <td>{money(b.amount_fils, locale)}</td>
               <td>
-                <span className="badge aqua">{stateLabel(b.state)}</span>
+                <span className="badge aqua">{stateLabel(b.state, locale)}</span>
               </td>
               <td>
                 <Link
@@ -436,6 +458,8 @@ export function BookingTable({
   );
 }
 export async function FamilyScreen() {
+  const { locale } = await serverDictionary();
+  const copy = parentCopy[locale];
   const { actor, token } = await requireIdentity("/parent");
   const [bookings, children] = await Promise.all([
     backend<Page<Booking>>("/bookings?scope=parent&pageSize=3", token),
@@ -467,7 +491,7 @@ export async function FamilyScreen() {
       </div>
       <div className="section-gap">
         {bookings.total ? (
-          <BookingCards items={bookings.items} />
+          <BookingCards items={bookings.items} locale={locale} copy={copy} />
         ) : (
           <Empty
             title="Their next adventure starts here"
@@ -520,6 +544,8 @@ export async function BookingsScreen({
   searchParams: Search;
   role?: "parent" | "partner" | "admin";
 }) {
+  const { locale } = await serverDictionary();
+  const copy = parentCopy[locale];
   const path = role === "partner" ? "/partner" : `/${role}/bookings`,
     { actor, token } = await requireIdentity(
       path,
@@ -529,7 +555,7 @@ export async function BookingsScreen({
           ? "superadmin"
           : "partner",
     );
-  const query = await pageQuery(searchParams);
+  const query = await pageQuery(searchParams, ["state"]);
   const data = await backend<Page<Booking>>(
     `/bookings?${new URLSearchParams({ ...query, scope: role === "admin" ? "all" : role })}`,
     token,
@@ -539,18 +565,18 @@ export async function BookingsScreen({
       <Title
         title={
           role === "parent"
-            ? "My bookings"
+            ? copy.booking.myBookings
             : role === "partner"
               ? "Activity requests"
               : "All bookings"
         }
-        note="Review requests, responses and booking progress."
+        note={role === "parent" ? copy.booking.progressNote : "Review requests, responses and booking progress."}
       />
       <form action={path} className="bookings-toolbar">
         <label>
-          Status
+          {role === "parent" ? copy.booking.status : "Status"}
           <select name="state" defaultValue={query.state ?? ""}>
-            <option value="">All statuses</option>
+            <option value="">{role === "parent" ? copy.booking.allStatuses : "All statuses"}</option>
             {[
               "REQUESTED",
               "OFFER_PENDING",
@@ -562,25 +588,25 @@ export async function BookingsScreen({
               "CANCELLED",
             ].map((state) => (
               <option value={state} key={state}>
-                {stateLabel(state)}
+                {stateLabel(state, locale)}
               </option>
             ))}
           </select>
         </label>
-        <button className="btn outline">Apply</button>
+        <button className="btn outline">{role === "parent" ? copy.booking.apply : "Apply"}</button>
       </form>
       {data.items.length ? (
         role === "parent" ? (
-          <BookingCards items={data.items} />
+          <BookingCards items={data.items} locale={locale} copy={copy} />
         ) : (
-          <BookingTable items={data.items} role={role} />
+          <BookingTable items={data.items} role={role} locale={locale} />
         )
       ) : (
         <Empty
-          title="No requests here yet"
+          title={role === "parent" ? copy.booking.emptyTitle : "No requests here yet"}
           note={
             role === "parent"
-              ? "Choose an activity to send your first request."
+              ? copy.booking.emptyNote
               : "New booking requests will appear here."
           }
         />
@@ -596,79 +622,113 @@ export async function BookingDetailScreen({
   id: string;
   role?: "parent" | "partner" | "admin";
 }) {
+  const { locale } = await serverDictionary();
+  const copy = parentCopy[locale];
   const { actor, token } = await requireIdentity(
     `/${role}/bookings/${id}`,
     role === "parent" ? undefined : role === "admin" ? "superadmin" : "partner",
   );
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) notFound();
   const b = await backend<Booking>(`/bookings/${id}`, token);
   if (role === "parent" && b.parent_id !== actor.id) notFound();
-  const status = await backend<{ financeWorkflowEnabled: boolean }>("/status");
+  const status = await backend<{ financeEnabled: boolean }>("/status");
+  const statusText = bookingStatusCopy(locale, b.state);
+  const deadline =
+    b.state === "REQUESTED"
+      ? b.response_due_at
+      : b.state === "OFFER_PENDING"
+        ? b.offer?.expiresAt
+        : b.state === "PAYMENT_DUE"
+          ? b.payment_due_at
+          : null;
   return (
     <Shell actor={actor} role={role}>
       <Link
         className="text-link"
         href={role === "partner" ? "/partner" : `/${role}/bookings`}
       >
-        ← All requests
+        ← {role === "parent" ? copy.booking.allRequests : "All requests"}
       </Link>
       <Title title={b.snapshot.title} note={b.snapshot.provider} />
       <div className="detail-grid">
         <section className="record-card">
-          <span className="badge aqua">{stateLabel(b.state)}</span>
+          <span className="badge aqua">{stateLabel(b.state, locale)}</span>
+          {role === "parent" && (
+            <dl className="status-summary">
+              <div>
+                <dt>{copy.booking.placeStatus}</dt>
+                <dd>{statusText.place}</dd>
+              </div>
+              <div>
+                <dt>{copy.booking.requiredAction}</dt>
+                <dd>{statusText.action}</dd>
+              </div>
+              <div>
+                <dt>{copy.booking.deadline}</dt>
+                <dd>
+                  {deadline
+                    ? `${dateTime(deadline, locale)} · ${copy.booking.dubaiTime}`
+                    : copy.booking.noDeadline}
+                </dd>
+              </div>
+            </dl>
+          )}
           <dl>
-            <dt>Session</dt>
-            <dd>{dateTime(b.snapshot.startsAt)} (Dubai)</dd>
-            <dt>Children</dt>
+            <dt>{role === "parent" ? copy.booking.session : "Session"}</dt>
+            <dd>{dateTime(b.snapshot.startsAt, locale)} ({copy.booking.dubaiTime})</dd>
+            <dt>{role === "parent" ? copy.booking.children : "Children"}</dt>
             <dd>{b.snapshot.children.map((c) => c.firstName).join(", ")}</dd>
-            <dt>Total</dt>
-            <dd>{money(b.amount_fils)}</dd>
-            <dt>Request reference</dt>
+            <dt>{role === "parent" ? copy.booking.total : "Total"}</dt>
+            <dd>{money(b.amount_fils, locale)}</dd>
+            <dt>{role === "parent" ? copy.booking.reference : "Request reference"}</dt>
             <dd className="wrap-id">{b.id}</dd>
             {b.state === "REQUESTED" && (
               <>
-                <dt>Response due</dt>
-                <dd>{dateTime(b.response_due_at)}</dd>
+                <dt>{role === "parent" ? copy.booking.responseDue : "Response due"}</dt>
+                <dd>{dateTime(b.response_due_at, locale)}</dd>
               </>
             )}
             {b.payment_due_at && (
               <>
-                <dt>Payment deadline</dt>
-                <dd>{dateTime(b.payment_due_at)}</dd>
+                <dt>{role === "parent" ? copy.booking.paymentDeadline : "Payment deadline"}</dt>
+                <dd>{dateTime(b.payment_due_at, locale)}</dd>
               </>
             )}
           </dl>
           {b.offer && (
             <div className="offer-note">
-              <h3>Provider offer · {money(b.offer.amountFils)}</h3>
+              <h3>{role === "parent" ? copy.booking.providerOffer : "Provider offer"} · {money(b.offer.amountFils, locale)}</h3>
               <p>{b.offer.reason}</p>
               <p className="fine-print">
-                Expires {dateTime(b.offer.expiresAt)}
+                {role === "parent" ? copy.booking.expires : "Expires"} {dateTime(b.offer.expiresAt, locale)}
               </p>
             </div>
           )}
-          <h3>Accepted cancellation policy</h3>
+          <h3>{role === "parent" ? copy.booking.acceptedPolicy : "Accepted cancellation policy"}</h3>
           <p className="record-meta details-policy">{b.snapshot.policy}</p>
           {b.payments?.map((payment, i) => (
             <p className="notice" key={i}>
-              Payment {payment.status} · {payment.reference}
+              {role === "parent" ? copy.booking.payment : "Payment"} {payment.status} · {payment.reference}
             </p>
           ))}
           {b.refunds?.map((refund, i) => (
             <p className="notice" key={i}>
-              Refund {refund.status} · {money(refund.amount_fils)}
+              {role === "parent" ? copy.booking.refund : "Refund"} {refund.status} · {money(refund.amount_fils, locale)}
             </p>
           ))}
         </section>
         <section className="panel">
-          <h2>Next steps</h2>
+          <h2>{role === "parent" ? copy.booking.nextSteps : "Next steps"}</h2>
           <p className="record-meta">
-            A request is confirmed only when its status says Confirmed.
+            {role === "parent" ? copy.booking.confirmedRule : "A request is confirmed only when its status says Confirmed."}
           </p>
           <BookingActions
             key={`${b.id}-${b.version}`}
             booking={b}
             mode={role}
-            finance={status.financeWorkflowEnabled}
+            finance={status.financeEnabled}
+            locale={locale}
+            copy={role === "parent" ? copy.booking : undefined}
           />
         </section>
       </div>
@@ -720,7 +780,7 @@ export async function ProfilesScreen({
               </p>
               <details>
                 <summary>Edit profile</summary>
-                <ChildEditor child={child} />
+                <ChildEditor key={JSON.stringify(child)} child={child} />
               </details>
             </article>
           ))}
@@ -731,6 +791,8 @@ export async function ProfilesScreen({
   );
 }
 export async function SavedScreen({ searchParams }: { searchParams: Search }) {
+  const { locale } = await serverDictionary();
+  const copy = parentCopy[locale];
   const { actor, token } = await requireIdentity("/parent/saved"),
     query = await pageQuery(searchParams),
     data = await backend<Page<Activity>>(
@@ -744,7 +806,7 @@ export async function SavedScreen({ searchParams }: { searchParams: Search }) {
         note="Keep their next favourite adventure close."
       />
       {data.items.length ? (
-        <ActivityCards items={data.items} saved />
+        <ActivityCards items={data.items} locale={locale} copy={copy} saved />
       ) : (
         <Empty
           title="A little inspiration goes a long way"
@@ -777,7 +839,7 @@ export async function OrganizationsScreen({
       path,
       admin ? "superadmin" : undefined,
     ),
-    query = await pageQuery(searchParams),
+    query = await pageQuery(searchParams, ["status","owned"], {status:["pending","approved","rejected","suspended"]}),
     data = await backend<Page<Provider>>(
       `/providers?${new URLSearchParams(query)}`,
       token,
@@ -903,7 +965,7 @@ export async function ProgramsScreen({
             {admin && (
               <details>
                 <summary>Edit activity & sessions</summary>
-                <CatalogueEditor activity={activity} />
+                <CatalogueEditor key={`${activity.id}-${activity.version}`} activity={activity} />
               </details>
             )}
             <details>

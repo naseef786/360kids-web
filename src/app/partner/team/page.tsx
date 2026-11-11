@@ -14,7 +14,7 @@ export default async function TeamPage() {
         title="Team access"
         note="Give existing accounts staff access to your organization."
       />
-      <Team organizations={organizations} accountId={actor.id} />
+      <Team organizations={organizations} />
     </Shell>
   );
 }

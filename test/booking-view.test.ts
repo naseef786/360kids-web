@@ -86,18 +86,18 @@ import { notificationHref } from "../src/lib/notification-view";
 test("notification destinations distinguish a provider’s own family bookings and pending applications", () => {
   assert.equal(
     notificationHref({ kind: "booking", workspace: "family" }, "provider"),
-    "/account/bookings",
+    "/parent/bookings",
   );
   assert.equal(
     notificationHref({ kind: "booking", workspace: "provider" }, "provider"),
-    "/provider/requests",
+    "/partner",
   );
   assert.equal(
     notificationHref({ kind: "provider", workspace: "family" }, "parent"),
-    "/become-a-provider",
+    "/partner/organizations",
   );
   assert.equal(
     notificationHref({ kind: "account", workspace: "family" }, "admin"),
-    "/account",
+    "/parent",
   );
 });

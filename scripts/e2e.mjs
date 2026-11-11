@@ -10,7 +10,7 @@ const fixture = JSON.parse(
     "utf8",
   ),
 );
-const origin = process.env.WEB_TEST_ORIGIN ?? "http://localhost:3000";
+const origin = process.env.WEB_TEST_ORIGIN ?? "http://127.0.0.1:3000";
 const checks = [];
 function check(label) {
   checks.push(label);
@@ -182,6 +182,7 @@ try {
   );
   const requestBody = {
       sessionId: activity.sessionId,
+      activityVersion: (await parent.api(`/activities/${activity.id}`)).version,
       childIds: [child.id],
       policyAccepted: true,
     },
@@ -287,6 +288,7 @@ try {
         key: randomUUID(),
         body: {
           sessionId: limited.id,
+          activityVersion: (await parent.api(`/activities/${activity.id}`)).version,
           childIds: [childId],
           policyAccepted: true,
         },

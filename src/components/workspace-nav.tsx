@@ -2,49 +2,48 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "./icon";
-const icons: Record<string, string> = {
-  Overview: "home",
-  "Explore activities": "search",
-  "My bookings": "calendar",
-  "Children & account": "person",
-  "Saved activities": "heart",
-  "Become a partner": "grid",
-  Requests: "calendar",
-  Listings: "grid",
-  "My organizations": "home",
-  "Team access": "person",
-  "Provider reviews": "person",
-  Catalogue: "grid",
-  "All bookings": "calendar",
-  "Corrections & audit": "check",
+
+export type WorkspaceLink = {
+  label: string;
+  href: string;
+  icon: string;
 };
-export function WorkspaceNav({ links }: { links: string[][] }) {
+
+export function WorkspaceNav({
+  links,
+  label,
+}: {
+  links: WorkspaceLink[];
+  label: string;
+}) {
   const path = usePathname();
   return (
-    <nav aria-label="Workspace navigation">
-      {links.map(([title, href]) => (
+    <nav aria-label={label}>
+      {links.map(({ label: title, href, icon }) => (
         <Link
           href={href}
           key={href}
           aria-current={path === href ? "page" : undefined}
         >
-          <Icon name={icons[title] ?? "grid"} />
+          <Icon name={icon} />
           {title}
         </Link>
       ))}
     </nav>
   );
 }
-export function ParentMobileNav() {
+
+export function ParentMobileNav({
+  label,
+  items,
+}: {
+  label: string;
+  items: WorkspaceLink[];
+}) {
   const path = usePathname();
   return (
-    <nav className="mobile-tabs" aria-label="Parent navigation">
-      {[
-        ["Explore", "/parent/activities", "home"],
-        ["Saved", "/parent/saved", "heart"],
-        ["Bookings", "/parent/bookings", "calendar"],
-        ["Profile", "/parent/profile", "person"],
-      ].map(([label, href, icon]) => (
+    <nav className="mobile-tabs" aria-label={label}>
+      {items.map(({ label: itemLabel, href, icon }) => (
         <Link
           key={href}
           href={href}
@@ -53,7 +52,7 @@ export function ParentMobileNav() {
           }
         >
           <Icon name={icon} />
-          {label}
+          {itemLabel}
         </Link>
       ))}
     </nav>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/server-api";
+import { requestOrigin } from "@/lib/same-origin";
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const token_hash = request.nextUrl.searchParams.get("token_hash");
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
       result && !result.error
         ? safeNext(request.nextUrl.searchParams.get("next"))
         : "/login?error=link",
-      request.url,
+      requestOrigin(request),
     ),
   );
 }

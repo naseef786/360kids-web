@@ -1,18 +1,13 @@
-export class RequestError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { fetchJson } from "./http";
+export { RequestError } from "./http";
 export async function request<T>(
   path: string,
   method = "GET",
   body?: unknown,
   key?: string,
+  signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(`/api/backend${path}`, {
+  return fetchJson<T>(`/api/backend${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
@@ -20,14 +15,8 @@ export async function request<T>(
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
+    signal,
   });
-  const data = await response.json();
-  if (!response.ok)
-    throw new RequestError(
-      response.status,
-      data.message ?? "Please try again.",
-    );
-  return data;
 }
 export const errorMessage = (error: unknown) =>
   error instanceof Error

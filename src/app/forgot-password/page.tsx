@@ -1,20 +1,17 @@
-import { Brand } from "@/components/shell";
-import { AuthForm } from "@/components/account-controls";
+import { AuthScreen } from "@/components/auth-screen";
 import { safeNext } from "@/lib/server-api";
+
 export default async function Page({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const q = await searchParams;
+  const query = await searchParams;
   return (
-    <main className="auth-page">
-      <Brand />
-      <AuthForm
-        mode="recover"
-        next={safeNext(q.next)}
-        linkError={q.error === "link"}
-      />
-    </main>
+    <AuthScreen
+      mode="recover"
+      next={safeNext(query.next)}
+      linkError={query.error === "link"}
+    />
   );
 }
