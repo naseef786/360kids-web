@@ -11,9 +11,17 @@ export const auth = (() => {
     return null;
   }
 })();
-export const API =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production" ? "" : "http://localhost:4000");
+const apiBaseUrl = (() => {
+  const configured = (
+    process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? ""
+  ).trim();
+  if (configured) return configured.replace(/\/$/, "");
+  if (process.env.NODE_ENV !== "production") return "http://localhost:4000";
+  throw new Error(
+    "Missing API_URL / NEXT_PUBLIC_API_URL for the production web app.",
+  );
+})();
+export const API = apiBaseUrl;
 export const api = createApiClient({
   baseUrl: API,
   getIdentity: async () => {

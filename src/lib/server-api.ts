@@ -6,7 +6,13 @@ import type { Identity } from "./types";
 import { fetchJson, RequestError as ApiError } from "./http";
 export { RequestError as ApiError } from "./http";
 export { safeNext } from "./navigation";
-export const apiOrigin = () => process.env.API_URL ?? "http://127.0.0.1:4000";
+export const apiOrigin = () => {
+  const configured = (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "")
+    .trim();
+  if (configured) return configured.replace(/\/$/, "");
+  if (process.env.NODE_ENV !== "production") return "http://127.0.0.1:4000";
+  throw new Error("Missing API_URL for the production web app.");
+};
 export async function backend<T>(path: string, token?: string): Promise<T> {
   try {
     return await fetchJson<T>(`${apiOrigin()}/v1${path}`, {
