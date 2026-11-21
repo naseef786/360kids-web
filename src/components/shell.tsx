@@ -11,6 +11,7 @@ import { LanguageSwitcher } from "./language-switcher";
 import { serverDictionary } from "@/lib/server-locale";
 import type { Locale, ShellDictionary } from "@/lib/i18n";
 import type { Identity, Page } from "@/lib/types";
+import { canUseAdminPath, operatorHome } from "@/lib/permissions";
 import "./workspace.css";
 import "./connected.css";
 
@@ -66,8 +67,8 @@ export function Header({
               {actor.roles.includes("partner") && (
                 <Link href="/partner">{dictionary.partner}</Link>
               )}
-              {actor.roles.includes("superadmin") && (
-                <Link href="/admin">{dictionary.superadmin}</Link>
+              {canUseAdminPath(actor,"/admin") && (
+                <Link href={operatorHome(actor)}>{dictionary.superadmin}</Link>
               )}
             </nav>
             <NotificationLink
@@ -217,13 +218,23 @@ export async function Shell({
               icon: "grid",
             },
             {
+              label: locale === "ar" ? "رسائل التواصل" : "Contact messages",
+              href: "/admin/contact-submissions",
+              icon: "grid",
+            },
+            {
               label: dictionary.nav.websiteContent,
               href: "/admin/content",
               icon: "grid",
             },
           ];
   const navigation: WorkspaceLink[] = [
-    ...links,
+    ...links.filter(link => role !== "admin" || (actor && canUseAdminPath(actor,link.href))),
+    {
+      label: locale === "ar" ? "أمان الحساب" : "Account security",
+      href: "/account/security",
+      icon: "check",
+    },
     {
       label: dictionary.notifications,
       href: `/${role}/notifications`,

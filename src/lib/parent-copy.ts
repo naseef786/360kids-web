@@ -56,6 +56,7 @@ export type ParentCopy = {
     reference: string;
     responseDue: string;
     paymentDeadline: string;
+    reviewDeadline: string;
     providerOffer: string;
     expires: string;
     acceptedPolicy: string;
@@ -83,6 +84,8 @@ export type ParentCopy = {
     signInIntroTitle: string;
     signInIntro: string;
     signIn: string;
+    childCount: string;
+    draftNote: string;
     title: string;
     from: string;
     providerConfirmation: string;
@@ -167,6 +170,7 @@ export const parentCopy = {
       reference: "Request reference",
       responseDue: "Response due",
       paymentDeadline: "Payment deadline",
+      reviewDeadline: "Payment review ends",
       providerOffer: "Provider offer",
       expires: "Expires",
       acceptedPolicy: "Accepted cancellation policy",
@@ -194,6 +198,8 @@ export const parentCopy = {
       signInIntroTitle: "Make room for discovery",
       signInIntro: "Sign in to choose your children and request a place.",
       signIn: "Sign in to request",
+      childCount: "Number of children",
+      draftNote: "Your session and count stay on this device for up to 7 days. No place is held until the provider accepts your request.",
       title: "Request a place",
       from: "From",
       providerConfirmation: "The provider confirms external availability after you send the request.",
@@ -276,6 +282,7 @@ export const parentCopy = {
       reference: "مرجع الطلب",
       responseDue: "موعد رد المزود",
       paymentDeadline: "الموعد النهائي للدفع",
+      reviewDeadline: "تنتهي مراجعة الدفع",
       providerOffer: "عرض المزود",
       expires: "ينتهي",
       acceptedPolicy: "سياسة الإلغاء المقبولة",
@@ -303,6 +310,8 @@ export const parentCopy = {
       signInIntroTitle: "ابدأ رحلة الاكتشاف",
       signInIntro: "سجّل الدخول لاختيار أطفالك وطلب مكان.",
       signIn: "سجّل الدخول للطلب",
+      childCount: "عدد الأطفال",
+      draftNote: "يُحفظ الموعد والعدد على هذا الجهاز لمدة تصل إلى 7 أيام. لا يُحجز مكان حتى يقبل المزوّد طلبك.",
       title: "اطلب مكاناً",
       from: "ابتداءً من",
       providerConfirmation: "يؤكد المزود التوفر الخارجي بعد إرسال الطلب.",
@@ -334,7 +343,7 @@ export const parentCopy = {
 export function bookingStatusCopy(locale: Locale, state: string) {
   const copy = locale === "ar" ? {
     REQUESTED: ["لا يوجد مكان محجوز بعد", "انتظر حتى يتحقق المزود من التوفر"],
-    OFFER_PENDING: ["المكان غير مؤكد", "راجع عرض المزود واقبله أو ارفضه"],
+    OFFER_PENDING: ["الأماكن محتجزة لهذا العرض لكنها غير مؤكدة", "راجع عرض المزود واقبله أو ارفضه"],
     PAYMENT_DUE: ["الأماكن محتجزة مؤقتاً", "أكمل الدفع وفق التعليمات المتفق عليها"],
     PAYMENT_CHECKING: ["الأماكن محتجزة أثناء مراجعة الدفع", "لا يلزم إجراء حالياً"],
     CONFIRMED: ["المكان مؤكد", "لا يلزم إجراء"],
@@ -343,7 +352,7 @@ export function bookingStatusCopy(locale: Locale, state: string) {
     CANCELLED: ["لا يوجد مكان", "لا يلزم إجراء"],
   } : {
     REQUESTED: ["No place is reserved yet", "Wait for the provider to check availability"],
-    OFFER_PENDING: ["The place is not confirmed", "Review and accept or decline the provider offer"],
+    OFFER_PENDING: ["Places are held for this offer, not confirmed", "Review and accept or decline the provider offer"],
     PAYMENT_DUE: ["Places are held temporarily", "Complete payment using the agreed instructions"],
     PAYMENT_CHECKING: ["Places are held while payment is reviewed", "No action is needed now"],
     CONFIRMED: ["The place is confirmed", "No action is needed"],

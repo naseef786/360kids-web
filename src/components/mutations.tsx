@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { request, errorMessage, RequestError } from "@/lib/client-api";
@@ -10,10 +10,14 @@ import type {
   Page,
   Provider,
   Session,
+  Identity,
 } from "@/lib/types";
+import { bookingControls } from "@/lib/permissions";
+import { StepUpNotice } from "./step-up-notice";
 import { money, dateTime } from "@/lib/types";
 import type { Locale } from "@/lib/i18n";
 import type { ParentCopy } from "@/lib/parent-copy";
+import { clearBookingIntent, readBookingIntent, saveBookingIntent } from "@/lib/booking-intent";
 export function MutationForm({
   children,
   submit,
@@ -220,6 +224,7 @@ export function BookingRequest({
   childrenPage,
   sessionsPage,
   signedIn,
+  emailVerified,
   locale,
   copy,
 }: {
@@ -227,6 +232,7 @@ export function BookingRequest({
   childrenPage: Page<Child> | null;
   sessionsPage: Page<Session>;
   signedIn: boolean;
+  emailVerified: boolean;
   locale: Locale;
   copy: ParentCopy["request"];
 }) {
@@ -237,16 +243,44 @@ export function BookingRequest({
     [error, setError] = useState("");
   const [sessionPage, setSessionPage] = useState(sessionsPage),
     [sessionId, setSessionId] = useState("");
+  const [childCount, setChildCount] = useState(1);
   const sessions = sessionPage.items;
+  useEffect(() => {
+    let active = true;
+    try {
+      const draft = readBookingIntent(localStorage, activity.id);
+      if (!draft) return;
+      const restore = async () => {
+        const page: Page<Session> = draft.sessionPage === sessionsPage.page ? sessionsPage :
+          await request(`/activities/${activity.id}/sessions?page=${draft.sessionPage}&pageSize=10`);
+        if (!active) return;
+        const session = page.items.find((item) => item.id === draft.sessionId);
+        if (!session || session.capacity - session.allocated < 1) {
+          clearBookingIntent(localStorage, activity.id);
+          return;
+        }
+        setSessionPage(page);
+        setSessionId(session.id);
+        setChildCount(draft.childCount);
+      };
+      void restore().catch(() => { /* Keep the visible first page when a saved page is unavailable. */ });
+    } catch { /* Browser storage may be disabled. Booking still works without it. */ }
+    return () => { active = false; };
+  }, [activity.id, sessionsPage]);
+  function remember(session: string, page: number, count: number) {
+    try {
+      if (session) saveBookingIntent(localStorage, activity.id, session, page, count);
+      else clearBookingIntent(localStorage, activity.id);
+    } catch { /* Storage is optional. */ }
+  }
   async function loadSessions(page: number) {
     setLoading(true);
     setError("");
     try {
-      setSessionPage(
-        await request(
-          `/activities/${activity.id}/sessions?page=${page}&pageSize=10`,
-        ),
-      );
+      const next: Page<Session> = await request(`/activities/${activity.id}/sessions?page=${page}&pageSize=10`);
+      setSessionPage(next);
+      setSessionId("");
+      try { clearBookingIntent(localStorage, activity.id); } catch { /* Storage is optional. */ }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -260,6 +294,35 @@ export function BookingRequest({
         <p className="record-meta">
           {copy.signInIntro}
         </p>
+        <label>{copy.chooseSession}
+          <select value={sessionId} onChange={(event) => {
+            setSessionId(event.target.value);
+            remember(event.target.value, sessionPage.page, childCount);
+          }}>
+            <option value="">{copy.selectDate}</option>
+            {sessions.map((session) => <option key={session.id} value={session.id}
+              disabled={session.capacity - session.allocated < 1}>
+              {dateTime(session.starts_at, locale)}
+            </option>)}
+          </select>
+        </label>
+        <div className="card-actions">
+          <button type="button" className="btn outline small" disabled={loading || sessionPage.page <= 1}
+            onClick={() => void loadSessions(sessionPage.page - 1)}>{copy.previousSessions}</button>
+          <button type="button" className="btn outline small" disabled={loading || sessionPage.page >= sessionPage.pages}
+            onClick={() => void loadSessions(sessionPage.page + 1)}>{copy.moreSessions}</button>
+        </div>
+        <label>{copy.childCount}
+          <input type="number" min={1} max={10} value={childCount}
+            onChange={(event) => {
+              const count = Number(event.target.value);
+              if (!Number.isInteger(count) || count < 1 || count > 10) return;
+              setChildCount(count);
+              remember(sessionId, sessionPage.page, count);
+            }} />
+        </label>
+        <p className="fine-print">{copy.draftNote}</p>
+        {error && <p className="notice error" role="alert">{error}</p>}
         <Link className="btn" href={`/login?next=/activities/${activity.id}`}>
           {copy.signIn}
         </Link>
@@ -285,6 +348,11 @@ export function BookingRequest({
       <p className="fine-print">
         {copy.providerConfirmation} {copy.platformHoldNote}
       </p>
+      {signedIn && !emailVerified && <div className="notice" role="status">
+        <p>{locale === "ar"
+          ? "يجب تأكيد البريد الإلكتروني قبل إرسال طلب الحجز. راجع رسالة التأكيد في بريدك الوارد."
+          : "Confirm your email before sending a booking request. Check your inbox for the confirmation message."}</p>
+      </div>}
       {!sessions.length ? (
         <div><p className="notice">{copy.noSessions}</p>
           {sessionPage.page > 1 && <button type="button" className="btn outline" disabled={loading} onClick={() => void loadSessions(1)}>{copy.backToSessions}</button>}
@@ -301,9 +369,10 @@ export function BookingRequest({
       ) : (
         <MutationForm
           label={copy.send}
-          disabled={loading}
+          disabled={loading || !emailVerified}
           intent={{selected,activityVersion:activity.version,sessionId}}
           onSuccess={() => {
+            try { clearBookingIntent(localStorage, activity.id); } catch { /* Storage is optional. */ }
             router.push("/parent/bookings");
           }}
           submit={(data, key) => {
@@ -327,7 +396,7 @@ export function BookingRequest({
               name="sessionId"
               required
               value={sessionId}
-              onChange={(e) => setSessionId(e.target.value)}
+              onChange={(e) => { setSessionId(e.target.value); remember(e.target.value, sessionPage.page, childCount); }}
             >
               <option value="" disabled>
                 {copy.selectDate}
@@ -452,18 +521,23 @@ export function BookingRequest({
 export function BookingActions({
   booking,
   mode,
+  actor,
   finance = false,
+  stripeTest = false,
   locale = "en",
   copy,
 }: {
   booking: Booking;
   mode: "parent" | "partner" | "admin";
+  actor: Identity;
   finance?: boolean;
+  stripeTest?: boolean;
   locale?: Locale;
   copy?: ParentCopy["booking"];
 }) {
   const active = !["CANCELLED", "EXPIRED", "DECLINED"].includes(booking.state);
-  const provider = mode !== "parent";
+  const controls = bookingControls(actor,mode);
+  const provider = controls.respond;
   const submit = (action: string) => (data: FormData, key: string) =>
     request(
       `/bookings/${booking.id}/actions`,
@@ -484,6 +558,7 @@ export function BookingActions({
       {provider && booking.state === "REQUESTED" && (
         <>
           <MutationForm label="Accept request" submit={submit("accept")}>
+            {controls.override && <label>Override reason<textarea name="reason" required maxLength={2000} /></label>}
             <p className="fine-print">
               Accepting holds places until the payment deadline. The booking
               remains unconfirmed.
@@ -537,7 +612,7 @@ export function BookingActions({
           </p>
         </MutationForm>
       )}
-      {booking.state === "PAYMENT_DUE" && (
+      {booking.state === "PAYMENT_DUE" && !stripeTest && (
         <p className="notice">
           {finance
             ? copy?.paymentDueNotice ?? "Payment is due by the deadline shown above."
@@ -552,17 +627,17 @@ export function BookingActions({
           </label>
         </MutationForm>
       )}
-      {mode === "admin" && finance && booking.state === "PAYMENT_CHECKING" && (
+      {controls.verify && finance && booking.state === "PAYMENT_CHECKING" && (controls.steppedUp ? (
         <MutationForm label="Verify payment" submit={submit("verify")}>
           <p className="fine-print">
             Only verify after checking the payment against the agreed collection
             process.
           </p>
         </MutationForm>
-      )}
+      ) : <StepUpNotice next={`/admin/bookings/${booking.id}`} locale={locale} />)}
       {active &&
         (provider ||
-          !["CONFIRMED", "PAYMENT_CHECKING"].includes(booking.state)) && (
+          (mode === "parent" && !["CONFIRMED", "PAYMENT_CHECKING"].includes(booking.state))) && (
           <details>
             <summary>{copy?.cancelThisRequest ?? "Cancel this request"}</summary>
             <MutationForm label={copy?.cancelRequest ?? "Cancel request"} submit={submit("cancel")}>
@@ -580,6 +655,56 @@ export function BookingActions({
         )}
     </div>
   );
+}
+
+export function StripeTestPayment({bookingId,enabled}:{bookingId:string;enabled:boolean}) {
+  const router=useRouter();
+  const [pending,setPending]=useState(false);
+  const [message,setMessage]=useState("");
+  const [error,setError]=useState("");
+  const busy=useRef(false);
+  async function reconcile() {
+    if(busy.current) return;
+    busy.current=true;
+    setPending(true);
+    setError("");
+    try {
+      const result=await request<{state:string}>(`/bookings/${bookingId}/stripe-test/reconcile`,"POST",{});
+      setMessage(result.state === "CONFIRMED"
+        ? "Your test payment was verified and this staging booking is confirmed."
+        : "Stripe has not verified payment yet. Your places are not confirmed.");
+      if(result.state === "CONFIRMED") router.refresh();
+    } catch(e) { setError(errorMessage(e)); }
+    finally { busy.current=false; setPending(false); }
+  }
+  useEffect(() => {
+    if(!enabled || !new URLSearchParams(window.location.search).has("stripe_session_id")) return;
+    const url=new URL(window.location.href);
+    url.searchParams.delete("stripe_session_id");
+    window.history.replaceState(null,"",url.pathname+url.search+url.hash);
+    queueMicrotask(() => { void reconcile(); });
+  // A return URL is only a prompt to ask the server to retrieve the session.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[bookingId,enabled]);
+  if(!enabled) return null;
+  return <div className="stack section-gap">
+    <p className="notice">Stripe test mode only. Use a Stripe test card; no real money is collected. Your place is confirmed only after server verification.</p>
+    <button className="btn" type="button" disabled={pending} onClick={async()=>{
+      if(busy.current) return;
+      busy.current=true; setPending(true); setError("");
+      try {
+        const result=await request<{url:string}>(`/bookings/${bookingId}/stripe-test/checkout`,"POST",{});
+        const target=new URL(result.url);
+        if(target.protocol!=="https:" || target.hostname!=="checkout.stripe.com") throw new Error("Unsafe Checkout destination.");
+        window.location.assign(target.href);
+      } catch(e) { setError(errorMessage(e)); busy.current=false; setPending(false); }
+    }}>{pending ? "Checking…" : "Continue to Stripe test checkout"}</button>
+    <button className="btn outline" type="button" disabled={pending} onClick={()=>void reconcile()}>
+      Check test payment status
+    </button>
+    {message && <p className="notice" role="status">{message}</p>}
+    {error && <p className="notice error" role="alert">{error}</p>}
+  </div>;
 }
 export function ProviderApplication() {
   return (

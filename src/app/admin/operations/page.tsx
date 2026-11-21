@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { operationsResources, hasCapability } from "@/lib/permissions";
+import { StepUpNotice } from "@/components/step-up-notice";
 import { requireIdentity, backend } from "@/lib/server-api";
 import { pageQuery, type Search } from "@/lib/page-query";
-import type { Page, Operations } from "@/lib/types";
+import type { Page } from "@/lib/types";
 import { Shell, Title, Pager, Empty } from "@/components/shell";
 import { CorrectionReview } from "@/components/catalogue-editor";
 import {
@@ -39,17 +42,11 @@ export default async function PageScreen({
       "superadmin",
     ),
     query = await pageQuery(searchParams,["resource"]),
-    resources = [
-      "corrections",
-      "audit",
-      "refunds",
-      "contacts",
-      "campaigns",
-      "subscriptions",
-    ],
+    resources = operationsResources(actor),
     resource = resources.includes(query.resource)
       ? query.resource
-      : "corrections";
+      : resources[0];
+  if (query.resource && !resources.includes(query.resource)) redirect("/access-denied");
   const { resource: unused, ...paging } = query;
   void unused;
   const [data, operations] = await Promise.all([
@@ -57,7 +54,7 @@ export default async function PageScreen({
       `/admin/lists/${resource}?${new URLSearchParams(paging)}`,
       token,
     ),
-    backend<Operations>("/admin/operations", token),
+    backend<{financeEnabled:boolean}>("/status"),
   ]);
   return (
     <Shell actor={actor} role="admin">
@@ -120,8 +117,8 @@ export default async function PageScreen({
             )}
             {resource === "refunds" &&
               row.status === "pending" &&
-              (operations.financeEnabled ? (
-                <RefundCompletion id={row.id} />
+              (operations.financeEnabled && hasCapability(actor,"refunds.complete") ? (
+                actor.assuranceLevel === "aal2" ? <RefundCompletion id={row.id} /> : <StepUpNotice next="/admin/operations?resource=refunds" />
               ) : (
                 <p className="notice">
                   Finance completion is not enabled during development.

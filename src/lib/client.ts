@@ -89,6 +89,7 @@ export interface Booking {
   held: boolean;
   response_due_at: string;
   payment_due_at: string | null;
+  review_due_at?: string | null;
   created_at: string;
   snapshot: {
     title: string;

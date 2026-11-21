@@ -3,6 +3,7 @@ import { cache } from "react";
 import { redirect, notFound } from "next/navigation";
 import { supabase } from "./supabase/server";
 import type { Identity } from "./types";
+import { canUseAdminPath } from "./permissions";
 import { fetchJson, RequestError as ApiError } from "./http";
 export { RequestError as ApiError } from "./http";
 export { safeNext } from "./navigation";
@@ -45,6 +46,7 @@ export const identity = cache(async () => {
 export async function requireIdentity(next: string, role?: string) {
   const session = await identity();
   if (!session) redirect(`/login?next=${encodeURIComponent(next)}`);
-  if (role && !session.actor.roles.includes(role)) redirect("/access-denied");
+  if (role === "superadmin" ? !canUseAdminPath(session.actor,next) : role && !session.actor.roles.includes(role))
+    redirect("/access-denied");
   return session;
 }

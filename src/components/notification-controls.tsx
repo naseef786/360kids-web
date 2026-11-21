@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { request, RequestError } from "@/lib/client-api";
 import { MutationForm } from "./mutations";
+import { foregroundRefresh } from "@/lib/foreground-refresh";
 
 export function NotificationLink({
   href,
@@ -18,44 +19,64 @@ export function NotificationLink({
 }) {
   const [unread,setUnread] = useState<number|null>(null);
   const [unavailable,setUnavailable] = useState(false);
+  const retry = useRef<(() => void) | null>(null);
   const router = useRouter();
   useEffect(() => {
-    const controller = new AbortController();
-    let running = false, previous: string|undefined, revoked = false;
-    async function refresh() {
-      if(running || revoked || document.visibilityState === "hidden") return;
-      running = true;
-      try {
-        const feed = await request<{unread:number;total:number}>("/notifications?page=1&pageSize=1","GET",undefined,undefined,controller.signal);
-        if(controller.signal.aborted) return;
+    let previous: string | undefined;
+    const poller = foregroundRefresh({
+      load: (signal) => request<{
+        unread: number;
+        total: number;
+        items: { id: string; sequence: string }[];
+      }>("/notifications?page=1&pageSize=1", "GET", undefined, undefined, signal),
+      isActive: () => navigator.onLine && document.visibilityState !== "hidden",
+      onData: (feed) => {
         setUnread(feed.unread);
         setUnavailable(false);
-        const signature = `${feed.total}:${feed.unread}`;
+        const signature = `${feed.items[0]?.id ?? ""}:${feed.items[0]?.sequence ?? ""}:${feed.total}:${feed.unread}`;
         if(previous !== undefined && signature !== previous) router.refresh();
         previous = signature;
-      } catch(error) {
-        if(!controller.signal.aborted) {
-          setUnavailable(true);
-          if(error instanceof RequestError && [401,403].includes(error.status)) {
-            setUnread(null);
-            revoked = true;
-            router.refresh();
-          }
+      },
+      onError: (error) => {
+        setUnavailable(true);
+        if(error instanceof RequestError && [401,403].includes(error.status)) {
+          setUnread(null);
+          router.refresh();
+          return false;
         }
-      } finally { running = false; }
-    }
+        return true;
+      },
+    });
+    const refresh = () => void poller.refresh();
+    const offline = () => { setUnavailable(true); refresh(); };
+    retry.current = refresh;
     void refresh();
-    const interval = setInterval(() => void refresh(),30000);
-    const focus = () => void refresh();
-    window.addEventListener("focus",focus);
-    document.addEventListener("visibilitychange",focus);
-    return () => { controller.abort(); clearInterval(interval); window.removeEventListener("focus",focus); document.removeEventListener("visibilitychange",focus); };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", offline);
+    window.addEventListener("notifications:changed", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      retry.current = null;
+      poller.stop();
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("offline", offline);
+      window.removeEventListener("notifications:changed", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   },[router]);
-  return <Link className="text-link" href={href} aria-label={`${label}${unread === null ? "" : `, ${unread}`}${unavailable ? `, ${unavailableLabel}` : ""}`}>
-    {label}{unread !== null && unread > 0 ? ` (${unread})` : ""}{unavailable ? ` · ${retryLabel}` : ""}
-  </Link>;
+  return <div className="notification-controls">
+    <Link className="text-link" href={href} aria-label={`${label}${unread === null ? "" : `, ${unread}`}`}>
+      {label}{unread !== null && unread > 0 ? ` (${unread})` : ""}
+    </Link>
+    {unavailable && <>
+      <span role="status" className="fine-print">{unavailableLabel}</span>
+      <button type="button" className="text-link" onClick={() => retry.current?.()}>{retryLabel}</button>
+    </>}
+  </div>;
 }
 
 export function MarkNotificationsRead({ids,label,pendingLabel,successMessage}:{ids?:string[];label:string;pendingLabel:string;successMessage:string}) {
-  return <MutationForm label={label} pendingLabel={pendingLabel} successMessage={successMessage} submit={() => request("/notifications/read","POST",ids ? {ids} : {all:true})}><></></MutationForm>;
+  return <MutationForm label={label} pendingLabel={pendingLabel} successMessage={successMessage} submit={() => request("/notifications/read","POST",ids ? {ids} : {all:true})} onSuccess={() => { window.dispatchEvent(new Event("notifications:changed")); }}><></></MutationForm>;
 }

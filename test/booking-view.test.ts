@@ -55,7 +55,7 @@ test("a provider who also books as a parent gets the correct collection in each 
     false,
   );
 });
-test("offers use their own deadline and timely payment reviews remain protected after the due date", () => {
+test("offers and payment reviews use their own deadlines, not the old payment due date", () => {
   assert.equal(bookingDeadline(booking), booking.offer!.expiresAt);
   assert.equal(
     bookingIsOverdue(booking, Date.parse("2030-04-30T12:00:00Z")),
@@ -70,16 +70,25 @@ test("offers use their own deadline and timely payment reviews remain protected 
       ...booking,
       state: "PAYMENT_CHECKING",
       payment_due_at: "2030-04-29T12:00:00Z",
+      review_due_at: "2030-05-03T12:00:00Z",
     }),
-    null,
+    "2030-05-03T12:00:00Z",
   );
   assert.equal(
     bookingIsOverdue(
-      { ...booking, state: "PAYMENT_CHECKING" },
+      { ...booking, state: "PAYMENT_CHECKING", review_due_at: "2030-05-03T12:00:00Z" },
       Date.parse("2030-05-02T12:00:00Z"),
     ),
     false,
   );
+  assert.equal(
+    bookingIsOverdue(
+      { ...booking, state: "PAYMENT_CHECKING", review_due_at: "2030-05-03T12:00:00Z" },
+      Date.parse("2030-05-03T12:00:00Z"),
+    ),
+    true,
+  );
+  assert.equal(bookingDeadline({ ...booking, state: "PAYMENT_CHECKING" }), null);
 });
 
 import { notificationHref } from "../src/lib/notification-view";

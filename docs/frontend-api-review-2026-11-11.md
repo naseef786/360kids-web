@@ -1,5 +1,7 @@
 # Frontend/API integration review — 11 November 2026
 
+> **Document authority — 17 November 2026:** This file is design/as-built or historical evidence, not a competing release plan. Current scope and workflow rules are [D01–D16](../../docs/DECISIONS.md), with one [implementation plan](../../docs/audit/IMPLEMENTATION_PLAN.md) and [gap map](../../docs/audit/REQUIREMENTS_GAP_ANALYSIS.md). Older proposals, assumptions, future-work lists and test results below do not override that baseline or certify the current release.
+
 ## Scope and result
 
 Reviewed the reachable public, family, partner and administrator routes, their forms, shared API clients, authentication handlers, pagination and backend contracts. Preserved existing uncommitted support/content work and the approved UI kit. The fixes below are implemented; this is not a guarantee that no undiscovered frontend defect remains or that the product is ready for production.

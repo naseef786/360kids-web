@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import type { Search } from "@/lib/page-query";
-import { ContentScreen, PublicPage, SupportScreen, contentSlugs } from "@/components/service-screens";
+import { ContentScreen, PublicPage, SupportScreen, ContactInboxScreen, contentSlugs } from "@/components/service-screens";
 import { NotificationScreen } from "@/components/notification-screen";
 const aliases:Record<string,string>={
   activities:"/parent/activities","sign-in":"/login","become-a-provider":"/partner/apply",
@@ -19,5 +19,6 @@ export default async function Page({params,searchParams}:{params:Promise<{path:s
   if(["parent/notifications","partner/notifications","admin/notifications"].includes(name)) return <NotificationScreen role={name.split("/")[0] as "parent"|"partner"|"admin"} searchParams={searchParams}/>;
   if(name==="admin/content") return <ContentScreen searchParams={searchParams}/>;
   if(["parent/support","partner/support","admin/support"].includes(name)) return <SupportScreen role={name.split("/")[0] as "parent"|"partner"|"admin"} searchParams={searchParams}/>;
+  if(name==="admin/contact-submissions") return <ContactInboxScreen searchParams={searchParams}/>;
   notFound();
 }

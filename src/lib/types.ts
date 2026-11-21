@@ -11,6 +11,9 @@ export type Identity = {
   role: string;
   roles: string[];
   active: boolean;
+  capabilities?: string[];
+  assuranceLevel?: "aal1" | "aal2";
+  emailVerified?: boolean;
 };
 export type Session = {
   id: string;
@@ -59,7 +62,7 @@ export type Member = {
 };
 export type Booking = {
   id: string;
-  parent_id: string;
+  parent_id: string | null;
   provider_id: string;
   state: string;
   version: number;
@@ -67,12 +70,13 @@ export type Booking = {
   quantity: number;
   response_due_at: string;
   payment_due_at: string | null;
+  review_due_at?: string | null;
   snapshot: {
     title: string;
     provider: string;
     startsAt: string;
     policy: string;
-    children: { id: string; firstName: string }[];
+    children: { id?: string; firstName: string; surname?: string | null; age?: number | null; eligible?: boolean }[];
   };
   offer: { amountFils: number; reason?: string; expiresAt: string } | null;
   payments?: { status: string; reference: string }[] | null;

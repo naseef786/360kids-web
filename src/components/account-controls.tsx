@@ -67,6 +67,7 @@ export function AuthForm({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [resending, setResending] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(linkError ? copy.invalidLink : "");
   const sending = useRef(false);
@@ -104,6 +105,27 @@ export function AuthForm({
     } finally {
       sending.current = false;
       setPending(false);
+    }
+  }
+
+  async function resend(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (resending) return;
+    setResending(true);
+    setError("");
+    setMessage("");
+    const email = new FormData(event.currentTarget).get("confirmationEmail");
+    try {
+      const result = await fetchJson<{ message: string }>("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resend-confirmation", email, next }),
+      });
+      setMessage(localizedAuthMessage(locale, result.message));
+    } catch (caught) {
+      setError(localizedAuthMessage(locale, errorMessage(caught)));
+    } finally {
+      setResending(false);
     }
   }
 
@@ -176,6 +198,13 @@ export function AuthForm({
           </Link>
         )}
       </div>
+      {(mode === "signin" || mode === "signup") && <details className="form-stack">
+        <summary>{locale === "ar" ? "إعادة إرسال رابط تأكيد البريد الإلكتروني" : "Resend confirmation link"}</summary>
+        <form onSubmit={resend} className="form-stack" aria-busy={resending}>
+          <label>{copy.email}<input name="confirmationEmail" type="email" autoComplete="email" required maxLength={254} disabled={resending} /></label>
+          <button className="btn outline" disabled={resending}>{resending ? copy.pleaseWait : (locale === "ar" ? "إرسال رابط جديد" : "Send a new link")}</button>
+        </form>
+      </details>}
     </section>
   );
 }

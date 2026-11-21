@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
-import { safeNext } from "@/lib/server-api";
+import { authCallbackPath } from "@/lib/navigation";
 import { requestOrigin } from "@/lib/same-origin";
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -15,9 +15,7 @@ export async function GET(request: NextRequest) {
       : null;
   return NextResponse.redirect(
     new URL(
-      result && !result.error
-        ? safeNext(request.nextUrl.searchParams.get("next"))
-        : "/login?error=link",
+      authCallbackPath(request.nextUrl.searchParams.get("next"), type, !!result && !result.error),
       requestOrigin(request),
     ),
   );

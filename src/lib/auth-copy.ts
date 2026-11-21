@@ -97,6 +97,12 @@ const arabicMessages: Record<string, string> = {
     "استعادة كلمة المرور غير متاحة مؤقتاً. حاول مرة أخرى.",
   "If an account exists, a password reset link will arrive by email.":
     "إذا كان الحساب موجوداً، فسيصلك رابط إعادة تعيين كلمة المرور عبر البريد الإلكتروني.",
+  "If this account needs confirmation, a new link will arrive by email.":
+    "إذا كان هذا الحساب يحتاج إلى التأكيد، فسيصلك رابط جديد عبر البريد الإلكتروني.",
+  "Please wait before requesting another confirmation link.":
+    "يرجى الانتظار قبل طلب رابط تأكيد آخر.",
+  "Confirmation email is temporarily unavailable. Please try again.":
+    "رسالة التأكيد غير متاحة مؤقتاً. حاول مرة أخرى.",
   "Open a valid reset link or sign in first.":
     "افتح رابط إعادة تعيين صالحاً أو سجل الدخول أولاً.",
   "Unable to update the password. Please try a new reset link.":

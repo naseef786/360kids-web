@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/server-api";
+import { passwordResetPath } from "@/lib/navigation";
 import { jsonBody } from "@/lib/request-body";
 import { RequestError } from "@/lib/http";
 import { sameOrigin, requestOrigin } from "@/lib/same-origin";
+import { resendConfirmation } from "@/lib/resend-confirmation";
 export async function POST(request: NextRequest) {
   if (!sameOrigin(request))
     return NextResponse.json(
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
         { status: 422 },
       );
     if (
-      action !== "recover" &&
+      action !== "recover" && action !== "resend-confirmation" &&
       (password.length < (action === "signin" ? 1 : 8) || password.length > 128)
     )
       return NextResponse.json(
@@ -59,6 +61,22 @@ export async function POST(request: NextRequest) {
           { status: error.status && error.status >= 500 ? 503 : error.status === 429 ? 429 : 401 },
         );
       return NextResponse.json({ next: safeNext(body.next) });
+    }
+    if (action === "resend-confirmation") {
+      const redirectTo = `${requestOrigin(request)}/auth/callback?next=${encodeURIComponent(safeNext(body.next))}`;
+      const result = await resendConfirmation(
+        async (address, destination) => {
+          const { error } = await auth.auth.resend({
+            type: "signup",
+            email: address,
+            options: { emailRedirectTo: destination },
+          });
+          return { error };
+        },
+        email,
+        redirectTo,
+      );
+      return NextResponse.json({ message: result.message }, { status: result.status });
     }
     if (action === "signup") {
       const { data, error } = await auth.auth.signUp({
@@ -87,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
     if (action === "recover") {
       const {error} = await auth.auth.resetPasswordForEmail(email, {
-        redirectTo: `${requestOrigin(request)}/auth/callback?next=/reset-password`,
+        redirectTo: `${requestOrigin(request)}/auth/callback?${new URLSearchParams({ next: passwordResetPath(body.next) })}`,
       });
       if(error) return NextResponse.json({message:"Password recovery is temporarily unavailable. Please try again."},{status:error.status === 429 ? 429 : 503});
       return NextResponse.json({
@@ -113,7 +131,7 @@ export async function POST(request: NextRequest) {
           },
           { status: 422 },
         );
-      return NextResponse.json({ next: "/parent" });
+      return NextResponse.json({ next: safeNext(body.next) });
     }
     return NextResponse.json({ message: "Unknown action." }, { status: 422 });
   } catch(error) {

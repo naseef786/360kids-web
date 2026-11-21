@@ -38,6 +38,14 @@ test("parent booking amounts, Dubai dates and place guidance follow the selected
     place: "No place is reserved yet",
     action: "Wait for the provider to check availability",
   });
+  assert.deepEqual(bookingStatusCopy("en", "OFFER_PENDING"), {
+    place: "Places are held for this offer, not confirmed",
+    action: "Review and accept or decline the provider offer",
+  });
+  assert.deepEqual(bookingStatusCopy("en", "PAYMENT_CHECKING"), {
+    place: "Places are held while payment is reviewed",
+    action: "No action is needed now",
+  });
   assert.deepEqual(bookingStatusCopy("ar", "CONFIRMED"), {
     place: "المكان مؤكد",
     action: "لا يلزم إجراء",

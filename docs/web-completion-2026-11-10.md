@@ -1,5 +1,7 @@
 # Web completion pass � 10 November 2026
 
+> **Historical completion report.** This report does not define current scope or certify release. Follow [D01–D16](../../docs/DECISIONS.md) and the [single implementation plan](../../docs/audit/IMPLEMENTATION_PLAN.md).
+
 ## Implemented
 
 - Replaced the reachable legacy client interface with redirects into the current server-rendered workspaces; legacy query parameters are retained.
