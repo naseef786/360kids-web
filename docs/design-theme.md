@@ -1,5 +1,7 @@
 # Approved 360 Kids UI reference
 
+> **Document authority — 17 November 2026:** This file is design/as-built or historical evidence, not a competing release plan. Current scope and workflow rules are [D01–D16](../../docs/DECISIONS.md), with one [implementation plan](../../docs/audit/IMPLEMENTATION_PLAN.md) and [gap map](../../docs/audit/REQUIREMENTS_GAP_ANALYSIS.md). Older proposals, assumptions, future-work lists and test results below do not override that baseline or certify the current release.
+
 The user identified **360Kids_Reference_Based_UIUX_Proposal_Kit.zip** as the decided UI on 8 November 2026. This replaces the earlier inferred green theme and the later Squibbly-derived pink theme. Do not invent another direction or use the raw Squibbly screenshots in preference to this kit.
 
 Source ZIP SHA-256: `5190708B9211B4DCECABE5B631D90DEBF141BEBC5F6B812F1D8D0FAE9044D486`.

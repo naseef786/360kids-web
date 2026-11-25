@@ -7,10 +7,15 @@ export default async function Page({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const query = await searchParams;
+  const rawNext = safeNext(query.next);
+  const next =
+    rawNext === "/partner" || rawNext.startsWith("/partner/") && rawNext !== "/partner/apply"
+      ? "/parent"
+      : rawNext;
   return (
     <AuthScreen
       mode="signup"
-      next={safeNext(query.next)}
+      next={next}
       linkError={query.error === "link"}
     />
   );

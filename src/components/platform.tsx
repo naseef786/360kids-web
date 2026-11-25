@@ -3,6 +3,7 @@ import Link from "next/link";
 import MobileNavigation from "./mobile-navigation";
 import { safeReturnTo } from "@/lib/navigation";
 import { bookingIsOverdue, visibleInWorkspace } from "@/lib/booking-view";
+import { displayReference } from "@/lib/display-reference";
 import RealtimeNotifications from "./realtime-notifications";
 import { Form } from "./form";
 import { usePathname, useRouter } from "next/navigation";
@@ -292,7 +293,7 @@ export default function Platform() {
                     ? "Your response needed"
                     : labels[b.state]}
               </span>
-              <small>#{b.id.slice(0, 8)}</small>
+              <small>{displayReference("booking",b.id)}</small>
             </div>
             <h3>{b.snapshot.title}</h3>
             <p>

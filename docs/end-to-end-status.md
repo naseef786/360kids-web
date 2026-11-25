@@ -1,5 +1,7 @@
 # Connected development verification
 
+> **Document authority — 17 November 2026:** This file is design/as-built or historical evidence, not a competing release plan. Current scope and workflow rules are [D01–D16](../../docs/DECISIONS.md), with one [implementation plan](../../docs/audit/IMPLEMENTATION_PLAN.md) and [gap map](../../docs/audit/REQUIREMENTS_GAP_ANALYSIS.md). Older proposals, assumptions, future-work lists and test results below do not override that baseline or certify the current release.
+
 Verified on 8 November 2026 against the configured Supabase development database and local web/backend servers.
 
 - Backend type checking, 16 automated test groups and build passed.

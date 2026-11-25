@@ -108,7 +108,7 @@ export const serviceCopy: Record<Locale, ServiceCopy> = {
     notifications: {
       title: "Notifications",
       unreadUpdates: (count) => `${count} unread updates.`,
-      refreshNote: "Updates refresh every 30 seconds while this page is visible.",
+      refreshNote: "Updates refresh every 30 seconds while online and visible. Refresh slows down if the service is unavailable.",
       read: "Read",
       unread: "Unread",
       dubaiTime: "Dubai time",
@@ -161,7 +161,7 @@ export const serviceCopy: Record<Locale, ServiceCopy> = {
     notifications: {
       title: "الإشعارات",
       unreadUpdates: (count) => `${count} تحديثات غير مقروءة.`,
-      refreshNote: "تُحدَّث البيانات كل 30 ثانية أثناء عرض هذه الصفحة.",
+      refreshNote: "تُحدَّث البيانات كل 30 ثانية أثناء عرض الصفحة والاتصال بالإنترنت. تتباطأ المحاولات إذا كانت الخدمة غير متاحة.",
       read: "مقروء",
       unread: "غير مقروء",
       dubaiTime: "بتوقيت دبي",

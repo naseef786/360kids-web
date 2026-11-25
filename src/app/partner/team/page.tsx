@@ -2,6 +2,7 @@ import { requireIdentity, backend } from "@/lib/server-api";
 import type { Provider, Page } from "@/lib/types";
 import { Shell, Title } from "@/components/shell";
 import { Team } from "@/components/team";
+import { StepUpNotice } from "@/components/step-up-notice";
 export default async function TeamPage() {
   const { actor, token } = await requireIdentity("/partner/team", "partner"),
     organizations = await backend<Page<Provider>>(
@@ -14,7 +15,7 @@ export default async function TeamPage() {
         title="Team access"
         note="Give existing accounts staff access to your organization."
       />
-      <Team organizations={organizations} />
+      {actor.assuranceLevel === "aal2" ? <Team organizations={organizations} /> : <StepUpNotice next="/partner/team" />}
     </Shell>
   );
 }

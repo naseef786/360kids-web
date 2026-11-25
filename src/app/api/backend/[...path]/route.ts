@@ -23,8 +23,9 @@ async function handle(
     "Content-Type": "application/json",
   };
   try {
-    const isPublic = request.method === "GET" && ["activities","content","status"].includes(path[0]);
-    if (!isPublic || request.cookies.getAll().some(c => c.name.startsWith("sb-"))) {
+    const isContact = request.method === "POST" && path.length === 1 && path[0] === "contact";
+    const isPublic = (request.method === "GET" && ["activities","content","status"].includes(path[0])) || isContact;
+    if (!isContact && (!isPublic || request.cookies.getAll().some(c => c.name.startsWith("sb-")))) {
       const auth = await supabase();
       const {
         data: { user }, error,

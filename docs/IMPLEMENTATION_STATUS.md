@@ -1,5 +1,9 @@
 # Phase 1 implementation status
 
+> **Document authority — 17 November 2026:** This file is design/as-built or historical evidence, not a competing release plan. Current scope and workflow rules are [D01–D16](../../docs/DECISIONS.md), with one [implementation plan](../../docs/audit/IMPLEMENTATION_PLAN.md) and [gap map](../../docs/audit/REQUIREMENTS_GAP_ANALYSIS.md). Older proposals, assumptions, future-work lists and test results below do not override that baseline or certify the current release.
+
+**19 November frontend check:** an isolated `/preview` route now presents labelled fictional family, provider and admin examples in local development only; it does not call the API or create bookings. Public discovery displays an explicit unavailable state when the local backend cannot load activities rather than treating the failure as an empty catalogue. The local backend was not running during this browser check, so live parent/provider/admin journeys remain unverified. Preview data is not production catalogue data.
+
 ## Implemented in this increment
 
 - Responsive catalog/detail and family/provider/admin interfaces connected to the API; category, area, age, budget and session-date filters; booking status filters and timeline.

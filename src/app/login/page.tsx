@@ -10,7 +10,7 @@ export default async function Page({
   return (
     <AuthScreen
       mode="signin"
-      next={safeNext(query.next)}
+      next={query.next ? safeNext(query.next) : ""}
       linkError={query.error === "link"}
     />
   );

@@ -1,9 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase/server";
-import { safeNext } from "@/lib/server-api";
+import { apiOrigin, safeNext } from "@/lib/server-api";
+import { passwordResetPath } from "@/lib/navigation";
 import { jsonBody } from "@/lib/request-body";
-import { RequestError } from "@/lib/http";
+import { fetchJson, RequestError } from "@/lib/http";
 import { sameOrigin, requestOrigin } from "@/lib/same-origin";
+import { resendConfirmation } from "@/lib/resend-confirmation";
+import { resolveAuthorizedNext } from "@/lib/permissions";
+import type { Identity } from "@/lib/types";
+
+async function authorizedDestination(accessToken: string | undefined, requestedNext: unknown): Promise<string> {
+  const fallbackSafe = safeNext(requestedNext);
+  const safeDefault =
+    fallbackSafe.startsWith("/admin") ||
+    (fallbackSafe.startsWith("/partner") && fallbackSafe !== "/partner/apply")
+      ? "/parent"
+      : fallbackSafe;
+  if (!accessToken) return safeDefault;
+  try {
+    const actor = await fetchJson<Identity>(
+      `${apiOrigin()}/v1/me`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" },
+      5000,
+    );
+    return resolveAuthorizedNext(actor, requestedNext);
+  } catch {
+    return safeDefault;
+  }
+}
 export async function POST(request: NextRequest) {
   if (!sameOrigin(request))
     return NextResponse.json(
@@ -39,7 +63,7 @@ export async function POST(request: NextRequest) {
         { status: 422 },
       );
     if (
-      action !== "recover" &&
+      action !== "recover" && action !== "resend-confirmation" &&
       (password.length < (action === "signin" ? 1 : 8) || password.length > 128)
     )
       return NextResponse.json(
@@ -47,7 +71,7 @@ export async function POST(request: NextRequest) {
         { status: 422 },
       );
     if (action === "signin") {
-      const { error } = await auth.auth.signInWithPassword({ email, password });
+      const { data, error } = await auth.auth.signInWithPassword({ email, password });
       if (error)
         return NextResponse.json(
           {
@@ -58,7 +82,25 @@ export async function POST(request: NextRequest) {
           },
           { status: error.status && error.status >= 500 ? 503 : error.status === 429 ? 429 : 401 },
         );
-      return NextResponse.json({ next: safeNext(body.next) });
+      return NextResponse.json({
+        next: await authorizedDestination(data.session?.access_token, body.next),
+      });
+    }
+    if (action === "resend-confirmation") {
+      const redirectTo = `${requestOrigin(request)}/auth/callback?next=${encodeURIComponent(safeNext(body.next))}`;
+      const result = await resendConfirmation(
+        async (address, destination) => {
+          const { error } = await auth.auth.resend({
+            type: "signup",
+            email: address,
+            options: { emailRedirectTo: destination },
+          });
+          return { error };
+        },
+        email,
+        redirectTo,
+      );
+      return NextResponse.json({ message: result.message }, { status: result.status });
     }
     if (action === "signup") {
       const { data, error } = await auth.auth.signUp({
@@ -72,13 +114,31 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             message:
-              "Unable to create this account. Please try again or sign in.",
+              error.status === 429
+                ? "Please wait before requesting another confirmation link."
+                : error.status && error.status >= 500
+                  ? "Sign-in is temporarily unavailable. Please try again."
+                  : error.code === "weak_password"
+                    ? "Use a password between 8 and 128 characters."
+                    : "Unable to create this account. Please try again or sign in.",
           },
-          { status: 422 },
+          {
+            status:
+              error.status === 429
+                ? 429
+                : error.status && error.status >= 500
+                  ? 503
+                  : 422,
+          },
         );
       return NextResponse.json(
         data.session
-          ? { next: safeNext(body.next) }
+          ? {
+              next: await authorizedDestination(
+                data.session.access_token,
+                body.next,
+              ),
+            }
           : {
               message:
                 "Check your email to confirm your account, then sign in.",
@@ -87,7 +147,7 @@ export async function POST(request: NextRequest) {
     }
     if (action === "recover") {
       const {error} = await auth.auth.resetPasswordForEmail(email, {
-        redirectTo: `${requestOrigin(request)}/auth/callback?next=/reset-password`,
+        redirectTo: `${requestOrigin(request)}/auth/callback?${new URLSearchParams({ next: passwordResetPath(body.next) })}`,
       });
       if(error) return NextResponse.json({message:"Password recovery is temporarily unavailable. Please try again."},{status:error.status === 429 ? 429 : 503});
       return NextResponse.json({
@@ -113,7 +173,12 @@ export async function POST(request: NextRequest) {
           },
           { status: 422 },
         );
-      return NextResponse.json({ next: "/parent" });
+      const {
+        data: { session },
+      } = await auth.auth.getSession();
+      return NextResponse.json({
+        next: await authorizedDestination(session?.access_token, body.next),
+      });
     }
     return NextResponse.json({ message: "Unknown action." }, { status: 422 });
   } catch(error) {
