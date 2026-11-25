@@ -38,6 +38,9 @@
     ".next/permissions-test/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "scripts/local-staging-server.ts",
+    "scripts/playwright-staging-e2e.ts",
+    "scripts/verify-permissions.ts"
   ]
 }
