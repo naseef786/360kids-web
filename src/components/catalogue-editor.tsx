@@ -2,11 +2,18 @@
 import type { Activity } from "@/lib/types";
 import { request } from "@/lib/client-api";
 import { MutationForm } from "./mutations";
-export function CatalogueEditor({ activity: a }: { activity: Activity }) {
+export function CatalogueEditor({
+  activity: a,
+  allowDetailsEdit = true,
+}: {
+  activity: Activity;
+  allowDetailsEdit?: boolean;
+}) {
   return (
     <div className="stack">
-      <MutationForm
-        label="Save activity details"
+      {allowDetailsEdit && (
+        <MutationForm
+          label="Save activity details"
         submit={(data) =>
           request(`/activities/${a.id}`, "PUT", {
             title: data.get("title"),
@@ -103,7 +110,8 @@ export function CatalogueEditor({ activity: a }: { activity: Activity }) {
           snapshots.
         </p>
       </MutationForm>
-      <details>
+      )}
+      <details open={!allowDetailsEdit}>
         <summary>Add a session</summary>
         <MutationForm
           label="Add session"

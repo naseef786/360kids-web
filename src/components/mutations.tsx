@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { request, errorMessage, RequestError } from "@/lib/client-api";
 import type {
   Activity,
   Booking,
+  BookingAssignment,
   Child,
   Page,
   Provider,
@@ -30,7 +31,7 @@ export function MutationForm({
   pendingLabel = "Saving…",
   successMessage = "Saved successfully.",
 }: {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   submit: (data: FormData, key: string) => Promise<unknown>;
   onSuccess?: () => void | Promise<void>;
   reset?: boolean;
@@ -244,6 +245,14 @@ export function BookingRequest({
   const [sessionPage, setSessionPage] = useState(sessionsPage),
     [sessionId, setSessionId] = useState("");
   const [childCount, setChildCount] = useState(1);
+  const [guestMode, setGuestMode] = useState<"guest" | "account">("guest");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestChildren, setGuestChildren] = useState([
+    { firstName: "", surname: "", birthDate: "" },
+  ]);
+  const [guestPolicyAccepted, setGuestPolicyAccepted] = useState(false);
+  const [guestExistingAccount, setGuestExistingAccount] = useState(false);
+  const [guestNotice, setGuestNotice] = useState("");
   const sessions = sessionPage.items;
   useEffect(() => {
     let active = true;
@@ -287,17 +296,93 @@ export function BookingRequest({
       setLoading(false);
     }
   }
+  async function submitGuestBooking(event: React.FormEvent) {
+    event.preventDefault();
+    if (!sessionId) {
+      setError(locale === "ar" ? "اختر موعداً أولاً." : "Select a session first.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setGuestNotice("");
+    setGuestExistingAccount(false);
+    try {
+      const response = await fetch("/api/guest-booking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activityId: activity.id,
+          activityVersion: activity.version,
+          sessionId,
+          email: guestEmail.trim(),
+          children: guestChildren.map((child) => ({
+            firstName: child.firstName.trim(),
+            ...(child.surname.trim() ? { surname: child.surname.trim() } : {}),
+            birthDate: child.birthDate,
+          })),
+          policyAccepted: guestPolicyAccepted,
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        next?: string;
+        existingAccount?: boolean;
+        needsConfirmation?: boolean;
+      };
+      if (response.status === 202 && data.needsConfirmation) {
+        setGuestNotice(data.message ?? "Check your email to confirm your address, then sign in.");
+        return;
+      }
+      if (!response.ok) {
+        if (response.status === 409 && data.existingAccount) {
+          setGuestExistingAccount(true);
+        }
+        setError(data.message ?? "Unable to submit guest booking.");
+        return;
+      }
+      try { clearBookingIntent(localStorage, activity.id); } catch { /* Storage is optional. */ }
+      router.push(data.next ?? "/parent/bookings");
+      router.refresh();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (!signedIn)
     return (
       <aside className="panel booking-form">
-        <h2>{copy.signInIntroTitle}</h2>
+        <h2>{guestMode === "guest" ? (locale === "ar" ? "الحجز كضيف" : "Book as Guest") : copy.signInIntroTitle}</h2>
         <p className="record-meta">
-          {copy.signInIntro}
+          {copy.from} {money(activity.price_fils, locale)} {copy.perChild}
         </p>
+        <div className="card-actions" role="tablist" aria-label={locale === "ar" ? "خيارات الحجز" : "Booking options"}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={guestMode === "guest"}
+            className={guestMode === "guest" ? "btn small" : "btn outline small"}
+            onClick={() => { setGuestMode("guest"); setError(""); }}
+          >
+            {locale === "ar" ? "الحجز كضيف" : "Book as Guest"}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={guestMode === "account"}
+            className={guestMode === "account" ? "btn small" : "btn outline small"}
+            onClick={() => { setGuestMode("account"); setError(""); }}
+          >
+            {locale === "ar" ? "تسجيل الدخول / حساب جديد" : "Sign in / Create Account"}
+          </button>
+        </div>
+
         <label>{copy.chooseSession}
           <select value={sessionId} onChange={(event) => {
             setSessionId(event.target.value);
-            remember(event.target.value, sessionPage.page, childCount);
+            remember(event.target.value, sessionPage.page, guestMode === "guest" ? guestChildren.length : childCount);
           }}>
             <option value="">{copy.selectDate}</option>
             {sessions.map((session) => <option key={session.id} value={session.id}
@@ -312,20 +397,141 @@ export function BookingRequest({
           <button type="button" className="btn outline small" disabled={loading || sessionPage.page >= sessionPage.pages}
             onClick={() => void loadSessions(sessionPage.page + 1)}>{copy.moreSessions}</button>
         </div>
-        <label>{copy.childCount}
-          <input type="number" min={1} max={10} value={childCount}
-            onChange={(event) => {
-              const count = Number(event.target.value);
-              if (!Number.isInteger(count) || count < 1 || count > 10) return;
-              setChildCount(count);
-              remember(sessionId, sessionPage.page, count);
-            }} />
-        </label>
-        <p className="fine-print">{copy.draftNote}</p>
-        {error && <p className="notice error" role="alert">{error}</p>}
-        <Link className="btn" href={`/login?next=/activities/${activity.id}`}>
-          {copy.signIn}
-        </Link>
+
+        {guestMode === "guest" ? (
+          <form onSubmit={(e) => void submitGuestBooking(e)} className="stack">
+            <label>{locale === "ar" ? "البريد الإلكتروني لولي الأمر" : "Parent email"}
+              <input
+                type="email"
+                required
+                value={guestEmail}
+                onChange={(event) => setGuestEmail(event.target.value)}
+                placeholder="parent@example.com"
+              />
+            </label>
+            {guestChildren.map((child, index) => (
+              <fieldset key={index} className="panel" style={{ padding: "0.75rem" }}>
+                <legend className="fine-print">
+                  {locale === "ar" ? `الطفل ${index + 1}` : `Child ${index + 1}`}
+                </legend>
+                <div className="form-grid">
+                  <label>{locale === "ar" ? "الاسم الأول" : "First name"}
+                    <input
+                      required
+                      value={child.firstName}
+                      onChange={(event) => {
+                        const next = [...guestChildren];
+                        next[index] = { ...next[index], firstName: event.target.value };
+                        setGuestChildren(next);
+                      }}
+                    />
+                  </label>
+                  <label>{locale === "ar" ? "اسم العائلة" : "Surname"}
+                    <input
+                      value={child.surname}
+                      onChange={(event) => {
+                        const next = [...guestChildren];
+                        next[index] = { ...next[index], surname: event.target.value };
+                        setGuestChildren(next);
+                      }}
+                    />
+                  </label>
+                  <label>{locale === "ar" ? "تاريخ الميلاد" : "Date of birth"}
+                    <input
+                      type="date"
+                      required
+                      value={child.birthDate}
+                      onChange={(event) => {
+                        const next = [...guestChildren];
+                        next[index] = { ...next[index], birthDate: event.target.value };
+                        setGuestChildren(next);
+                      }}
+                    />
+                  </label>
+                </div>
+                {guestChildren.length > 1 && (
+                  <button
+                    type="button"
+                    className="btn outline small"
+                    onClick={() => {
+                      const next = guestChildren.filter((_, i) => i !== index);
+                      setGuestChildren(next);
+                      remember(sessionId, sessionPage.page, next.length);
+                    }}
+                  >
+                    {locale === "ar" ? "إزالة الطفل" : "Remove child"}
+                  </button>
+                )}
+              </fieldset>
+            ))}
+            {guestChildren.length < 10 && (
+              <button
+                type="button"
+                className="btn outline small"
+                onClick={() => {
+                  const next = [...guestChildren, { firstName: "", surname: "", birthDate: "" }];
+                  setGuestChildren(next);
+                  remember(sessionId, sessionPage.page, next.length);
+                }}
+              >
+                {locale === "ar" ? "+ إضافة طفل آخر" : "+ Add another child"}
+              </button>
+            )}
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                required
+                checked={guestPolicyAccepted}
+                onChange={(event) => setGuestPolicyAccepted(event.target.checked)}
+              />
+              <span>
+                {locale === "ar"
+                  ? "أفهم أن هذا طلب حجز وليس حجزاً مؤكداً إلا بعد موافقة المزود وتأكيد الدفع."
+                  : "I understand this is a booking request, not a confirmed place until the provider accepts and payment is verified."}
+              </span>
+            </label>
+            <p className="fine-print">
+              {locale === "ar"
+                ? `الإجمالي التقديري: ${money(activity.price_fils * guestChildren.length, locale)}`
+                : `Estimated total: ${money(activity.price_fils * guestChildren.length, locale)} (${guestChildren.length} ${guestChildren.length === 1 ? "child" : "children"})`}
+            </p>
+            {guestNotice && <p className="notice" role="status">{guestNotice}</p>}
+            {error && <p className="notice error" role="alert">{error}</p>}
+            {guestExistingAccount && (
+              <Link className="btn outline" href={`/login?next=/activities/${activity.id}`}>
+                {copy.signIn}
+              </Link>
+            )}
+            <button type="submit" className="btn" disabled={loading}>
+              {loading
+                ? (locale === "ar" ? "جاري إرسال الطلب..." : "Submitting request...")
+                : (locale === "ar" ? "إرسال طلب الحجز كضيف" : "Submit Guest Booking Request")}
+            </button>
+          </form>
+        ) : (
+          <>
+            <p className="record-meta">{copy.signInIntro}</p>
+            <label>{copy.childCount}
+              <input type="number" min={1} max={10} value={childCount}
+                onChange={(event) => {
+                  const count = Number(event.target.value);
+                  if (!Number.isInteger(count) || count < 1 || count > 10) return;
+                  setChildCount(count);
+                  remember(sessionId, sessionPage.page, count);
+                }} />
+            </label>
+            <p className="fine-print">{copy.draftNote}</p>
+            {error && <p className="notice error" role="alert">{error}</p>}
+            <div className="card-actions">
+              <Link className="btn" href={`/login?next=/activities/${activity.id}`}>
+                {copy.signIn}
+              </Link>
+              <Link className="btn outline" href={`/signup?next=/activities/${activity.id}`}>
+                {locale === "ar" ? "إنشاء حساب ولي أمر" : "Create parent account"}
+              </Link>
+            </div>
+          </>
+        )}
       </aside>
     );
   async function childPage(page: number) {
@@ -603,14 +809,28 @@ export function BookingActions({
         </details>
       )}
       {mode === "parent" && booking.state === "OFFER_PENDING" && (
-        <MutationForm
-          label={`${copy?.acceptOffer ?? "Accept offer"} · ${money(booking.offer?.amountFils ?? booking.amount_fils, locale)}`}
-          submit={submit("accept-offer")}
-        >
-          <p className="fine-print">
-            {copy?.acceptOfferNote ?? "Accept the revised total and proceed to the payment stage."}
-          </p>
-        </MutationForm>
+        <div className="stack">
+          <MutationForm
+            label={`${copy?.acceptOffer ?? "Accept offer"} · ${money(booking.offer?.amountFils ?? booking.amount_fils, locale)}`}
+            submit={submit("accept-offer")}
+          >
+            <p className="fine-print">
+              {copy?.acceptOfferNote ?? "Accept the revised total and proceed to the payment stage."}
+            </p>
+          </MutationForm>
+          <details>
+            <summary>{locale === "ar" ? "رفض العرض" : "Decline offer"}</summary>
+            <MutationForm
+              label={locale === "ar" ? "تأكيد رفض العرض" : "Decline offer"}
+              submit={submit("reject-offer")}
+            >
+              <label>
+                {locale === "ar" ? "السبب (اختياري)" : "Reason (optional)"}
+                <textarea name="reason" maxLength={2000} />
+              </label>
+            </MutationForm>
+          </details>
+        </div>
       )}
       {booking.state === "PAYMENT_DUE" && !stripeTest && (
         <p className="notice">
@@ -976,5 +1196,129 @@ export function ActivityForm({
         )}
       </div>
     </MutationForm>
+  );
+}
+
+export function BookingStaffAssignment({
+  providerId,
+  bookingId,
+}: {
+  providerId: string;
+  bookingId: string;
+}) {
+  const [assignments, setAssignments] = useState<Page<BookingAssignment> | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await request<Page<BookingAssignment>>(
+        `/providers/${providerId}/bookings/${bookingId}/assignments`,
+      );
+      setAssignments(res);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [providerId, bookingId]);
+
+  useEffect(() => {
+    let active = true;
+    void request<Page<BookingAssignment>>(
+      `/providers/${providerId}/bookings/${bookingId}/assignments`,
+    )
+      .then((res) => {
+        if (active) {
+          setAssignments(res);
+          setError("");
+        }
+      })
+      .catch((e) => {
+        if (active) setError(errorMessage(e));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [providerId, bookingId]);
+
+  return (
+    <details className="panel section-gap">
+      <summary>
+        Assigned staff ({assignments ? assignments.total : "…"})
+      </summary>
+      <div className="section-gap">
+        <p className="fine-print">
+          Staff with booking permissions for this activity&rsquo;s branch can be
+          assigned to handle this request.
+        </p>
+        {loading && <p role="status">Loading assignments…</p>}
+        {error && (
+          <p className="notice error" role="alert">
+            {error}
+          </p>
+        )}
+        {assignments && assignments.items.length === 0 && (
+          <p className="record-meta">No staff currently assigned.</p>
+        )}
+        {assignments && (
+          <div className="stack section-gap">
+            {assignments.items.map((a) => (
+              <div className="child-row" key={a.user_id}>
+                <span>{a.email}</span>
+                <MutationForm
+                  label="Unassign"
+                  onSuccess={load}
+                  submit={() =>
+                    request(
+                      `/providers/${providerId}/bookings/${bookingId}/assignments`,
+                      "PUT",
+                      {
+                        userId: a.user_id,
+                        assigned: false,
+                      },
+                    )
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="section-gap">
+          <MutationForm
+            label="Assign staff member"
+            onSuccess={load}
+            reset
+            submit={(data) =>
+              request(
+                `/providers/${providerId}/bookings/${bookingId}/assignments`,
+                "PUT",
+                {
+                  userId: String(data.get("userId")),
+                  assigned: true,
+                },
+              )
+            }
+          >
+            <label>
+              Staff account ID
+              <input
+                name="userId"
+                placeholder="User ID of branch booking staff"
+                required
+                pattern="[0-9a-fA-F-]{36}"
+              />
+            </label>
+          </MutationForm>
+        </div>
+      </div>
+    </details>
   );
 }

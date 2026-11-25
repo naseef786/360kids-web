@@ -54,7 +54,7 @@ export function SignOut({
 
 export function AuthForm({
   mode,
-  next = "/parent",
+  next = "",
   linkError = false,
   locale,
   copy,
@@ -79,7 +79,8 @@ export function AuthForm({
     setPending(true);
     setMessage("");
     setError("");
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     try {
       const result = await fetchJson<{ next?: string; message: string }>(
         "/api/auth",
@@ -99,6 +100,7 @@ export function AuthForm({
         router.refresh();
       } else {
         setMessage(localizedAuthMessage(locale, result.message));
+        if (mode === "signup") form.reset();
       }
     } catch (caught) {
       setError(localizedAuthMessage(locale, errorMessage(caught)));

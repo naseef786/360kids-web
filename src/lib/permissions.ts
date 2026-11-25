@@ -1,4 +1,5 @@
 import type { Identity } from "./types";
+import { safeNext } from "./navigation";
 
 export type Capability = "bookings.read" | "bookings.override" | "payments.read" |
   "payments.verify" | "refunds.complete" | "support.manage" | "content.manage";
@@ -42,6 +43,37 @@ export function operatorHome(actor: Identity): string {
   if (hasCapability(actor, "support.manage")) return "/admin/support";
   if (hasCapability(actor, "payments.read")) return "/admin/operations";
   return "/parent";
+}
+
+export function defaultHomeForActor(actor: Identity): string {
+  if (actor.roles.includes("superadmin") || canUseAdminPath(actor, "/admin")) {
+    return operatorHome(actor);
+  }
+  if (actor.roles.includes("partner")) {
+    return "/partner";
+  }
+  return "/parent";
+}
+
+export function resolveAuthorizedNext(actor: Identity, requestedNext: unknown): string {
+  const safe = safeNext(requestedNext, "");
+  if (!safe || safe === "/" || safe === "/login" || safe === "/signup") {
+    return defaultHomeForActor(actor);
+  }
+  const pathname = safe.split("?", 1)[0];
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return canUseAdminPath(actor, safe) ? safe : defaultHomeForActor(actor);
+  }
+  if (pathname === "/partner/apply") {
+    return safe;
+  }
+  if (pathname === "/partner" || pathname.startsWith("/partner/")) {
+    return actor.roles.includes("partner") ? safe : defaultHomeForActor(actor);
+  }
+  if (pathname === "/parent" && requestedNext === undefined) {
+    return defaultHomeForActor(actor);
+  }
+  return safe;
 }
 
 export function bookingControls(actor: Identity, mode: "parent" | "partner" | "admin") {

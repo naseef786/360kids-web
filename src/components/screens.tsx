@@ -30,6 +30,7 @@ import {
   ActivityForm,
   BookingActions,
   BookingRequest,
+  BookingStaffAssignment,
   ChildEditor,
   CorrectionForm,
   ProviderApplication,
@@ -40,12 +41,29 @@ import {
 } from "./mutations";
 const photos: Record<string, string> = {
   Sports: "movement",
+  Outdoors: "movement",
+  Swimming: "movement",
   Arts: "creativity",
   Music: "creativity",
+  "Creative arts": "creativity",
   Learning: "discovery",
-  Outdoors: "movement",
   "Indoor play": "discovery",
+  STEM: "discovery",
+  Nature: "discovery",
 };
+
+export const STANDARD_CATEGORIES = [
+  "Sports",
+  "Arts",
+  "Music",
+  "Learning",
+  "Outdoors",
+  "Indoor play",
+  "Creative arts",
+  "STEM",
+  "Swimming",
+  "Nature",
+];
 export function ActivityCards({
   items,
   locale,
@@ -175,6 +193,7 @@ export async function DiscoveryScreen() {
       </section>
     </Shell>;
   }
+  const categories = [...new Set([...data.items.map((activity) => activity.category), ...STANDARD_CATEGORIES])];
   return (
     <Shell actor={session?.actor} publicPage>
       <section className="discovery-hero connected-hero">
@@ -214,24 +233,22 @@ export async function DiscoveryScreen() {
           <span>✦</span>
         </div>
       </section>
-      <Filters query={{}} copy={copy} categories={[...new Set(data.items.map((activity) => activity.category))]} />
-      {data.items.length > 0 && (
-        <section className="discovery-section" id="categories">
-          <h2>{copy.exploreByCategory}</h2>
-          <div className="category-grid">
-            {[...new Set(data.items.map((activity) => activity.category))].map((category, i) => (
-              <Link
-                className={`category-tile tile-${i % 3}`}
-                key={category}
-                href={`/parent/activities?category=${encodeURIComponent(category)}`}
-              >
-                <Icon name={category} size={36} />
-                {category}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      <Filters query={{}} copy={copy} categories={categories} />
+      <section className="discovery-section" id="categories">
+        <h2>{copy.exploreByCategory}</h2>
+        <div className="category-grid">
+          {categories.map((category, i) => (
+            <Link
+              className={`category-tile tile-${i % 3}`}
+              key={category}
+              href={`/parent/activities?category=${encodeURIComponent(category)}`}
+            >
+              <Icon name={category} size={36} />
+              {category}
+            </Link>
+          ))}
+        </div>
+      </section>
       <section className="discovery-section">
         <div className="section-heading">
           <h2>{copy.discoverNew}</h2>
@@ -292,13 +309,22 @@ export async function CatalogueScreen({
   const query = await pageQuery(searchParams, ["q","age","area","category"]);
   const session = await identity();
   const data = await backend<Page<Activity>>(`/activities?${new URLSearchParams(query)}`,session?.token);
+  const categories = [...new Set([...data.items.map((activity) => activity.category), ...STANDARD_CATEGORIES])];
+  const hasFilters = Boolean(query.q || query.age || query.area || query.category);
   return (
     <Shell actor={session?.actor} publicPage>
       <Title
         title={copy.exploreActivities}
         note={copy.catalogueNote}
       />
-      <Filters query={query} copy={copy} categories={[...new Set(data.items.map((activity) => activity.category))]} />
+      <Filters query={query} copy={copy} categories={categories} />
+      {hasFilters && (
+        <div className="card-actions" style={{ marginBottom: "16px" }}>
+          <Link className="btn outline small" href="/parent/activities">
+            {copy.clearFilters}
+          </Link>
+        </div>
+      )}
       {data.items.length ? (
         <ActivityCards items={data.items} locale={locale} copy={copy} />
       ) : (
@@ -494,12 +520,8 @@ export async function FamilyScreen() {
     <Shell actor={actor}>
       <section className="family-banner">
         <div>
-          <h1>Your family activities</h1>
-          <p>
-            More time exploring.
-            <br />
-            Everything you need in one place.
-          </p>
+          <h1>{copy.family.title}</h1>
+          <p>{copy.family.note}</p>
         </div>
         <Image
           src="/activities/movement.jpg"
@@ -509,9 +531,9 @@ export async function FamilyScreen() {
         />
       </section>
       <div className="section-heading section-gap">
-        <h2>Recent requests</h2>
+        <h2>{copy.family.recentRequests}</h2>
         <Link className="text-link" href="/parent/bookings">
-          View all ({bookings.total}) →
+          {copy.family.viewAll} ({bookings.total}) →
         </Link>
       </div>
       <div className="section-gap">
@@ -519,11 +541,11 @@ export async function FamilyScreen() {
           <BookingCards items={bookings.items} locale={locale} copy={copy} />
         ) : (
           <Empty
-            title="Their next adventure starts here"
-            note="Explore activities and request a place for your family."
+            title={copy.family.emptyRequestsTitle}
+            note={copy.family.emptyRequestsNote}
           >
             <Link className="btn" href="/parent/activities">
-              Find an activity
+              {copy.family.findActivity}
             </Link>
           </Empty>
         )}
@@ -531,9 +553,9 @@ export async function FamilyScreen() {
       <div className="family-grid">
         <section className="panel">
           <div className="section-heading">
-            <h2>Your children</h2>
+            <h2>{copy.family.yourChildren}</h2>
             <Link className="text-link" href="/parent/profile">
-              Manage ({children.total})
+              {copy.family.manage} ({children.total})
             </Link>
           </div>
           {children.items.map((c) => (
@@ -544,18 +566,17 @@ export async function FamilyScreen() {
           ))}
           {!children.total && (
             <p className="record-meta">
-              Add a child to start exploring age-appropriate activities.
+              {copy.family.addChildPrompt}
             </p>
           )}
         </section>
         <section className="panel">
-          <h2>Keep the possibilities close</h2>
+          <h2>{copy.family.savedTitle}</h2>
           <p className="record-meta">
-            Save activities to your account and come back when the time is
-            right.
+            {copy.family.savedNote}
           </p>
           <Link className="text-link" href="/parent/saved">
-            View saved activities →
+            {copy.family.viewSaved} →
           </Link>
         </section>
       </div>
@@ -659,6 +680,19 @@ export async function BookingDetailScreen({
   const status = await backend<{ financeEnabled: boolean; stripeTestEnabled?: boolean }>("/status");
   const statusText = bookingStatusCopy(locale, b.state);
   const deadline = bookingDeadline(b);
+  const stepIndex =
+    b.state === "CONFIRMED"
+      ? 3
+      : ["PAYMENT_DUE", "PAYMENT_CHECKING"].includes(b.state)
+        ? 2
+        : b.state === "OFFER_PENDING"
+          ? 1
+          : b.state === "REQUESTED"
+            ? 0
+            : -1;
+  const timelineSteps = locale === "ar"
+    ? ["تم إرسال الطلب", "مراجعة المزوّد", "الدفع والتحقق", "مؤكد"]
+    : ["Requested", "Provider review", "Payment", "Confirmed"];
   return (
     <Shell actor={actor} role={role}>
       <Link
@@ -670,7 +704,32 @@ export async function BookingDetailScreen({
       <Title title={b.snapshot.title} note={b.snapshot.provider} />
       <div className="detail-grid">
         <section className="record-card">
-          <span className="badge aqua">{stateLabel(b.state, locale)}</span>
+          <span
+            className={`badge ${
+              b.state === "CONFIRMED"
+                ? "green"
+                : ["REQUESTED", "PAYMENT_DUE"].includes(b.state)
+                  ? "orange"
+                  : ["DECLINED", "EXPIRED", "CANCELLED"].includes(b.state)
+                    ? "pink"
+                    : "aqua"
+            }`}
+          >
+            {stateLabel(b.state, locale)}
+          </span>
+          {stepIndex >= 0 && (
+            <ol className="booking-timeline" aria-label={locale === "ar" ? "مراحل الحجز" : "Booking progress"}>
+              {timelineSteps.map((label, idx) => (
+                <li
+                  key={label}
+                  className={idx < stepIndex ? "done" : idx === stepIndex ? "current" : ""}
+                >
+                  <span>{idx + 1}</span>
+                  <small>{label}</small>
+                </li>
+              ))}
+            </ol>
+          )}
           {role === "parent" && (
             <dl className="status-summary">
               <div>
@@ -752,6 +811,9 @@ export async function BookingDetailScreen({
           />
           {role === "parent" && b.state === "PAYMENT_DUE" && (
             <StripeTestPayment bookingId={b.id} enabled={Boolean(status.stripeTestEnabled)} />
+          )}
+          {role === "partner" && (
+            <BookingStaffAssignment providerId={b.provider_id} bookingId={b.id} />
           )}
         </section>
       </div>
@@ -907,10 +969,25 @@ export async function OrganizationsScreen({
                 <ProviderReview provider={provider} />
               </details>
             )}
+            {!admin && provider.status === "pending" && (
+              <p className="notice">
+                Application pending review. Operational partner tools unlock after admin approval.
+              </p>
+            )}
+            {!admin && provider.status === "rejected" && (
+              <p className="notice error">
+                This application was not approved. Review the details or contact support.
+              </p>
+            )}
             {!admin && provider.status === "approved" && (
-              <Link className="text-link" href="/partner">
-                Open partner workspace →
-              </Link>
+              <div className="card-actions">
+                <Link className="btn outline small" href="/partner">
+                  Open requests →
+                </Link>
+                <Link className="btn small" href="/partner/team">
+                  Manage team & branches →
+                </Link>
+              </div>
             )}
           </article>
         ))}
@@ -985,12 +1062,16 @@ export async function ProgramsScreen({
               <summary>Review details & policy</summary>
               <p className="details-policy">{activity.policy}</p>
             </details>
-            {admin && (
-              <details>
-                <summary>Edit activity & sessions</summary>
-                <CatalogueEditor key={`${activity.id}-${activity.version}`} activity={activity} />
-              </details>
-            )}
+            <details>
+              <summary>
+                {admin ? "Edit activity & sessions" : "Add sessions"}
+              </summary>
+              <CatalogueEditor
+                key={`${activity.id}-${activity.version}`}
+                activity={activity}
+                allowDetailsEdit={admin}
+              />
+            </details>
             <details>
               <summary>
                 {admin ? "Publication decision" : "Request a correction"}
@@ -1046,16 +1127,27 @@ export async function AdminScreen() {
         ))}
       </div>
       <section className="panel">
-        <h2>Platform settings</h2>
+        <h2>Platform settings & operations</h2>
         <p className="record-meta">
           Payment workflow: {data.financeEnabled ? "Enabled" : "Not enabled"}
         </p>
         <p className="record-meta">
           WhatsApp delivery: {data.whatsappEnabled ? "Enabled" : "Not enabled"}
         </p>
-        <p className="fine-print">
-          Development requests and approvals can be tested using fictional data.
-        </p>
+        <div className="card-actions section-gap">
+          <Link className="btn outline small" href="/admin/support">
+            Support cases →
+          </Link>
+          <Link className="btn outline small" href="/admin/contact-submissions">
+            Contact messages →
+          </Link>
+          <Link className="btn outline small" href="/admin/content">
+            Content pages →
+          </Link>
+          <Link className="btn outline small" href="/admin/operations">
+            Audit & operations →
+          </Link>
+        </div>
       </section>
     </Shell>
   );

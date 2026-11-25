@@ -60,6 +60,22 @@ export type Member = {
   role: string;
   active: boolean;
 };
+export type Branch = {
+  id: string;
+  provider_id: string;
+  name: string;
+  active: boolean;
+};
+export type BranchRole = {
+  user_id: string;
+  role: "branch_manager" | "booking_staff" | "content_staff";
+  active: boolean;
+  email: string;
+};
+export type BookingAssignment = {
+  user_id: string;
+  email: string;
+};
 export type Booking = {
   id: string;
   parent_id: string | null;

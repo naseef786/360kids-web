@@ -111,6 +111,21 @@ export type ParentCopy = {
     noReservation: string;
     acceptPolicy: string;
   };
+  family: {
+    title: string;
+    note: string;
+    recentRequests: string;
+    viewAll: string;
+    emptyRequestsTitle: string;
+    emptyRequestsNote: string;
+    findActivity: string;
+    yourChildren: string;
+    manage: string;
+    addChildPrompt: string;
+    savedTitle: string;
+    savedNote: string;
+    viewSaved: string;
+  };
 };
 
 export const parentCopy = {
@@ -225,6 +240,21 @@ export const parentCopy = {
       noReservation: "The provider reviews your request. Sending it does not reserve or confirm a place.",
       acceptPolicy: "I accept this activity’s cancellation policy.",
     },
+    family: {
+      title: "Your family activities",
+      note: "More time exploring. Everything you need in one place.",
+      recentRequests: "Recent requests",
+      viewAll: "View all",
+      emptyRequestsTitle: "Their next adventure starts here",
+      emptyRequestsNote: "Explore activities and request a place for your family.",
+      findActivity: "Find an activity",
+      yourChildren: "Your children",
+      manage: "Manage",
+      addChildPrompt: "Add a child to start exploring age-appropriate activities.",
+      savedTitle: "Keep the possibilities close",
+      savedNote: "Save activities to your account and come back when the time is right.",
+      viewSaved: "View saved activities",
+    },
   },
   ar: {
     viewActivity: "عرض النشاط",
@@ -336,6 +366,21 @@ export const parentCopy = {
       estimatedTotal: "الإجمالي التقديري",
       noReservation: "يراجع المزود طلبك. إرسال الطلب لا يحجز أو يؤكد مكاناً.",
       acceptPolicy: "أوافق على سياسة إلغاء هذا النشاط.",
+    },
+    family: {
+      title: "أنشطة عائلتك",
+      note: "وقت أطول للاستكشاف وكل ما تحتاجه في مكان واحد.",
+      recentRequests: "الطلبات الأخيرة",
+      viewAll: "عرض الكل",
+      emptyRequestsTitle: "مغامرتهم القادمة تبدأ من هنا",
+      emptyRequestsNote: "استكشف الأنشطة واطلب مكاناً لعائلتك.",
+      findActivity: "ابحث عن نشاط",
+      yourChildren: "أطفالك",
+      manage: "إدارة",
+      addChildPrompt: "أضف طفلاً لبدء استكشاف الأنشطة المناسبة لعمره.",
+      savedTitle: "احتفظ بالإمكانيات قريبة منك",
+      savedNote: "احفظ الأنشطة في حسابك وعُد إليها في الوقت المناسب.",
+      viewSaved: "عرض الأنشطة المحفوظة",
     },
   },
 } as const satisfies Record<Locale, ParentCopy>;

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canUseAdminPath, bookingControls, operationsResources, operatorHome } from "../src/lib/permissions";
+import { canUseAdminPath, bookingControls, defaultHomeForActor, operationsResources, operatorHome, resolveAuthorizedNext } from "../src/lib/permissions";
 import type { Identity } from "../src/lib/types";
 
 const parent: Identity = {id:"synthetic",email:"synthetic@example.invalid",roles:["parent"],role:"parent",active:true};
@@ -43,4 +43,20 @@ test("finance and support controls remain separate and finance requires step-up"
   assert.equal(bookingControls(finance,"parent").verify,false);
   assert.equal(bookingControls({...parent,roles:["parent","partner"]},"partner").verify,false);
   assert.equal(canUseAdminPath({...finance,capabilities:[]},"/admin/bookings"),false);
+});
+
+test("post-auth destination never routes parents to partner or admin workspaces", () => {
+  const partner: Identity = { ...parent, role: "provider", roles: ["parent", "partner"] };
+  assert.equal(defaultHomeForActor(parent), "/parent");
+  assert.equal(defaultHomeForActor(partner), "/partner");
+  assert.equal(defaultHomeForActor(ordinaryAdmin), "/admin");
+  assert.equal(resolveAuthorizedNext(parent, "/partner"), "/parent");
+  assert.equal(resolveAuthorizedNext(parent, "/partner/programs"), "/parent");
+  assert.equal(resolveAuthorizedNext(parent, "/admin"), "/parent");
+  assert.equal(resolveAuthorizedNext(parent, "/partner/apply"), "/partner/apply");
+  assert.equal(resolveAuthorizedNext(parent, "/activities/123"), "/activities/123");
+  assert.equal(resolveAuthorizedNext(partner, "/partner"), "/partner");
+  assert.equal(resolveAuthorizedNext(partner, "/admin"), "/partner");
+  assert.equal(resolveAuthorizedNext(ordinaryAdmin, "/admin/partners"), "/admin/partners");
+  assert.equal(resolveAuthorizedNext(ordinaryAdmin, "/admin/bookings"), "/admin");
 });
