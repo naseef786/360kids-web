@@ -685,7 +685,8 @@ a.contact-method:hover { border-color: var(--secondary); transform: translateY(-
 }
 .filter-submit-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 .mobile-filter-trigger {
@@ -983,12 +984,25 @@ a.contact-method:hover { border-color: var(--secondary); transform: translateY(-
     min-height: 60px !important;
     padding: 8px 12px !important;
     gap: 8px !important;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  .app-header:has(.role-links) {
+    flex-wrap: wrap !important;
+  }
+  .app-header .brand {
+    min-width: 0;
   }
   .app-header .header-actions {
     width: auto !important;
     flex-wrap: nowrap !important;
     gap: 6px !important;
     padding-bottom: 0 !important;
+  }
+  .app-header:has(.role-links) .header-actions {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-end;
   }
   .app-header .header-actions > a.btn:not(.outline) {
     display: none;
