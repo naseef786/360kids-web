@@ -28,6 +28,53 @@ export const DEFAULT_STOREFRONT_THEME: StorefrontTheme = {
   cardDensity: "comfortable",
 };
 
+export const DEFAULT_COLLECTIONS: StorefrontCollection[] = [
+  {
+    id: "default-stem",
+    title: "STEM & Future Builders",
+    subtitle: "Robotics, coding & hands-on discovery",
+    badge: "Popular",
+    tone: "aqua",
+    category: "Learning",
+    area: "",
+    age: "",
+    published: true,
+  },
+  {
+    id: "default-sports",
+    title: "Active Kids & Swimming",
+    subtitle: "High-energy sports & water confidence",
+    badge: "Trending",
+    tone: "cream",
+    category: "Sports",
+    area: "",
+    age: "",
+    published: true,
+  },
+  {
+    id: "default-arts",
+    title: "Creative Arts & Music",
+    subtitle: "Painting, rhythm & imaginative play",
+    badge: "Studio",
+    tone: "pink",
+    category: "Arts",
+    area: "",
+    age: "",
+    published: true,
+  },
+  {
+    id: "default-outdoors",
+    title: "Outdoors & Nature",
+    subtitle: "Fresh-air adventures across Dubai",
+    badge: "Weekend",
+    tone: "aqua",
+    category: "Outdoors",
+    area: "",
+    age: "",
+    published: true,
+  },
+];
+
 export function parseCollections(raw: string | undefined | null): StorefrontCollection[] {
   if (!raw) return [];
   try {

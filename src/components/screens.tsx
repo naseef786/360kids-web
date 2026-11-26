@@ -27,7 +27,7 @@ import type { Locale } from "@/lib/i18n";
 import { Empty, Pager, Shell, Title } from "./shell";
 import { CatalogueEditor } from "./catalogue-editor";
 import { ExploreFilters } from "./explore-filters";
-import { collectionHref, parseCollections, parseTheme } from "@/lib/storefront";
+import { collectionHref, DEFAULT_COLLECTIONS, parseCollections, parseTheme } from "@/lib/storefront";
 import {
   ActivityForm,
   BookingActions,
@@ -194,7 +194,8 @@ export async function DiscoveryScreen() {
       </section>
     </Shell>;
   }
-  const collections = collectionsPage?.published !== false ? parseCollections(collectionsPage?.body).filter((c) => c.published) : [];
+  const savedCollections = collectionsPage?.published !== false ? parseCollections(collectionsPage?.body).filter((c) => c.published) : [];
+  const collections = savedCollections.length > 0 ? savedCollections : DEFAULT_COLLECTIONS;
   const theme = themePage?.published !== false ? parseTheme(themePage?.body) : parseTheme(null);
   const categories = [...new Set([...data.items.map((activity) => activity.category), ...STANDARD_CATEGORIES])];
   return (
