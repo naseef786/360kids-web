@@ -295,33 +295,42 @@ export async function Shell({
           <Footer dictionary={dictionary} />
         </main>
       </div>
-      {role === "parent" && (
-        <ParentMobileNav
-          label={dictionary.parentNavigation}
-          items={[
-            {
-              label: dictionary.explore,
-              href: "/parent/activities",
-              icon: "home",
-            },
-            {
-              label: dictionary.nav.saved,
-              href: "/parent/saved",
-              icon: "heart",
-            },
-            {
-              label: dictionary.nav.bookings,
-              href: "/parent/bookings",
-              icon: "calendar",
-            },
-            {
-              label: dictionary.nav.profile,
-              href: "/parent/profile",
-              icon: "person",
-            },
-          ]}
-        />
-      )}
+      {(() => {
+        const mobileItems: WorkspaceLink[] = publicPage && !actor
+          ? [
+              { label: locale === "ar" ? "الرئيسية" : "Home", href: "/", icon: "home" },
+              { label: dictionary.explore, href: "/parent/activities", icon: "search" },
+              { label: dictionary.signIn, href: "/login", icon: "person" },
+              { label: dictionary.becomePartner, href: "/partner/apply", icon: "grid" },
+            ]
+          : role === "partner"
+            ? [
+                { label: dictionary.nav.requests, href: "/partner", icon: "calendar" },
+                { label: dictionary.nav.listings, href: "/partner/programs", icon: "grid" },
+                { label: dictionary.nav.organizations, href: "/partner/organizations", icon: "home" },
+                { label: dictionary.nav.teamAccess, href: "/partner/team", icon: "person" },
+              ]
+            : role === "admin"
+              ? [
+                  { label: dictionary.nav.overview, href: "/admin", icon: "home" },
+                  { label: dictionary.nav.providerReviews, href: "/admin/partners", icon: "person" },
+                  { label: dictionary.nav.catalogue, href: "/admin/programs", icon: "grid" },
+                  { label: dictionary.nav.allBookings, href: "/admin/bookings", icon: "calendar" },
+                ]
+              : [
+                  { label: dictionary.nav.overview, href: "/parent", icon: "home" },
+                  { label: dictionary.explore, href: "/parent/activities", icon: "search" },
+                  { label: dictionary.nav.saved, href: "/parent/saved", icon: "heart" },
+                  { label: dictionary.nav.bookings, href: "/parent/bookings", icon: "calendar" },
+                  { label: dictionary.nav.profile, href: "/parent/profile", icon: "person" },
+                ];
+        return (
+          <ParentMobileNav
+            label={dictionary.parentNavigation}
+            items={mobileItems}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -68,6 +68,7 @@ export function AuthForm({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [resending, setResending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState(linkError ? copy.invalidLink : "");
   const sending = useRef(false);
@@ -153,34 +154,57 @@ export function AuthForm({
         {mode !== "recover" && (
           <label>
             {copy.password}
-            <input
-              aria-label={copy.password}
-              disabled={pending}
-              name="password"
-              type="password"
-              minLength={mode === "signin" ? 1 : 8}
-              maxLength={128}
-              autoComplete={
-                mode === "signin" ? "current-password" : "new-password"
-              }
-              required
-            />
+            <div className="password-field">
+              <input
+                aria-label={copy.password}
+                disabled={pending}
+                name="password"
+                type={showPassword ? "text" : "password"}
+                minLength={mode === "signin" ? 1 : 8}
+                maxLength={128}
+                autoComplete={
+                  mode === "signin" ? "current-password" : "new-password"
+                }
+                required
+              />
+              <button
+                type="button"
+                className="btn outline small password-toggle"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={
+                  showPassword
+                    ? locale === "ar" ? "إخفاء كلمة المرور" : "Hide password"
+                    : locale === "ar" ? "إظهار كلمة المرور" : "Show password"
+                }
+              >
+                {showPassword
+                  ? locale === "ar" ? "إخفاء" : "Hide"
+                  : locale === "ar" ? "إظهار" : "Show"}
+              </button>
+            </div>
             {mode !== "signin" && (
               <small className="fine-print">{copy.passwordHint}</small>
             )}
           </label>
         )}
         {error && (
-          <p className="notice error" role="alert">
-            {error}
-          </p>
+          <div className="notice error" role="alert">
+            <p>{error}</p>
+            {mode === "update-password" && linkError && (
+              <p style={{ marginTop: "10px" }}>
+                <Link className="btn outline small" href={`/forgot-password?next=${encodeURIComponent(next)}`}>
+                  {locale === "ar" ? "طلب رابط إعادة تعيين جديد" : "Request a fresh reset link"}
+                </Link>
+              </p>
+            )}
+          </div>
         )}
         {message && (
           <p className="notice success" role="status">
             {message}
           </p>
         )}
-        <button className="btn" disabled={pending}>
+        <button type="submit" className="btn" disabled={pending}>
           {pending ? copy.pleaseWait : copy.submit[mode]}
         </button>
       </form>

@@ -15,8 +15,10 @@ import {
 } from "./service-forms";
 import { Empty, Pager, Shell, Title } from "./shell";
 import { ContactForm } from "./contact-form";
+import { CollectionsStudio, ThemeCustomizer } from "./storefront-studio";
 
 export const contentSlugs = ["about", "contact", "faq", "terms", "privacy"];
+const adminContentTabs = [...contentSlugs, "collections", "theme"];
 
 export async function PublicPage({ slug }: { slug: string }) {
   const [session, page, {locale}] = await Promise.all([
@@ -100,32 +102,38 @@ export async function ContentScreen({ searchParams }: { searchParams: Search }) 
   const { actor, token } = await requireIdentity("/admin/content", "superadmin");
   const query = await searchParams;
   const slug =
-    typeof query.slug === "string" && contentSlugs.includes(query.slug)
+    typeof query.slug === "string" && adminContentTabs.includes(query.slug)
       ? query.slug
       : "about";
   const page = await backend<ContentPage | null>(`/manage/content/${slug}`, token);
   return (
     <Shell actor={actor} role="admin">
       <Title
-        title="Website content"
-        note="Publish reviewed content only. Pages display plain text."
+        title="Website content & Storefront Studio"
+        note="Manage public pages, Shopify-style collections, and storefront design."
       />
       <nav className="status-tabs" aria-label="Website pages">
-        {contentSlugs.map((item) => (
+        {adminContentTabs.map((item) => (
           <Link
             key={item}
             href={`/admin/content?slug=${item}`}
             aria-current={item === slug ? "page" : undefined}
           >
-            {item}
+            {item === "collections" ? "Collections" : item === "theme" ? "Design & Theme" : item}
           </Link>
         ))}
       </nav>
       <section className="panel section-gap">
-        <ContentForm key={`${slug}-${page?.version}`} slug={slug} page={page} />
+        {slug === "collections" ? (
+          <CollectionsStudio key="collections" page={page} />
+        ) : slug === "theme" ? (
+          <ThemeCustomizer key="theme" page={page} />
+        ) : (
+          <ContentForm key={`${slug}-${page?.version}`} slug={slug} page={page} />
+        )}
       </section>
-      <Link href={`/${slug}`} className="text-link">
-        View public page
+      <Link href={slug === "collections" || slug === "theme" ? "/" : `/${slug}`} className="text-link">
+        {slug === "collections" || slug === "theme" ? "View live storefront" : "View public page"}
       </Link>
     </Shell>
   );

@@ -11,7 +11,7 @@ export default async function Page({
     <AuthScreen
       mode="update-password"
       next={safeNext(query.next)}
-      linkError={query.error === "link"}
+      linkError={Boolean(query.error || query.error_code)}
     />
   );
 }

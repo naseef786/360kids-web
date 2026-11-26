@@ -26,20 +26,28 @@ export async function backend<T>(path: string, token?: string): Promise<T> {
   }
 }
 export const identity = cache(async () => {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) return null;
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) return null;
   const auth = await supabase();
-  const {
-    data: { user },
-    error,
-  } = await auth.auth.getUser();
-  if (error && error.status && error.status >= 500) throw new ApiError(503,"Sign-in is temporarily unavailable. Please try again.");
-  if (error || !user) return null;
   const {
     data: { session },
   } = await auth.auth.getSession();
-  if (!session) return null;
+  if (!session?.access_token) return null;
+  const [userResult, actorResult] = await Promise.all([
+    auth.auth.getUser(),
+    backend<Identity>("/me", session.access_token).then(
+      (actor) => ({ ok: true as const, actor }),
+      (err) => ({ ok: false as const, err }),
+    ),
+  ]);
+  if (userResult.error && userResult.error.status && userResult.error.status >= 500) {
+    throw new ApiError(503, "Sign-in is temporarily unavailable. Please try again.");
+  }
+  if (userResult.error || !userResult.data.user) return null;
+  if (!actorResult.ok) throw actorResult.err;
   return {
-    actor: await backend<Identity>("/me", session.access_token),
+    actor: actorResult.actor,
     token: session.access_token,
   };
 });

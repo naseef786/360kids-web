@@ -23,7 +23,13 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await auth.auth.getUser();
+  const isPrefetch =
+    request.headers.get("next-router-prefetch") === "1" ||
+    request.headers.get("purpose") === "prefetch";
+  const isRsc = request.headers.get("rsc") === "1";
+  if (!isPrefetch && !isRsc) {
+    await auth.auth.getUser();
+  }
   response.headers.set("Cache-Control", "private, no-store");
   return response;
 }

@@ -26,6 +26,8 @@ import {
 import type { Locale } from "@/lib/i18n";
 import { Empty, Pager, Shell, Title } from "./shell";
 import { CatalogueEditor } from "./catalogue-editor";
+import { ExploreFilters } from "./explore-filters";
+import { collectionHref, parseCollections, parseTheme } from "@/lib/storefront";
 import {
   ActivityForm,
   BookingActions,
@@ -59,7 +61,6 @@ export const STANDARD_CATEGORIES = [
   "Learning",
   "Outdoors",
   "Indoor play",
-  "Creative arts",
   "STEM",
   "Swimming",
   "Nature",
@@ -79,11 +80,7 @@ export function ActivityCards({
     <div className="activity-grid">
       {items.map((a) => (
         <article className="activity-card" key={a.id}>
-          <Link
-            className="activity-image"
-            aria-label={`${copy.viewActivity}: ${a.title}`}
-            href={`/activities/${a.id}`}
-          >
+          <div className="activity-image">
             <Image
               src={`/activities/${photos[a.category] ?? "discovery"}.jpg`}
               alt=""
@@ -91,12 +88,10 @@ export function ActivityCards({
               height={600}
               sizes="(max-width:650px) 90vw, 30vw"
             />
-          </Link>
+          </div>
           <div className="activity-body">
             <span className="badge aqua">{a.category}</span>
-            <h3 className="section-gap">
-              <Link href={`/activities/${a.id}`}>{a.title}</Link>
-            </h3>
+            <h3 className="section-gap">{a.title}</h3>
             <p>
               {a.provider_name} · {a.area}
             </p>
@@ -178,8 +173,14 @@ export async function DiscoveryScreen() {
   const copy = parentCopy[locale];
   const session = await identity();
   let data: Page<Activity>;
+  let collectionsPage: { body?: string; published?: boolean } | null = null;
+  let themePage: { body?: string; published?: boolean } | null = null;
   try {
-    data = await backend<Page<Activity>>("/activities?page=1&pageSize=3",session?.token);
+    [data, collectionsPage, themePage] = await Promise.all([
+      backend<Page<Activity>>("/activities?page=1&pageSize=3", session?.token),
+      backend<{ body?: string; published?: boolean } | null>("/content/collections").catch(() => null),
+      backend<{ body?: string; published?: boolean } | null>("/content/theme").catch(() => null),
+    ]);
   } catch {
     return <Shell actor={session?.actor} publicPage>
       <section className="discovery-section" role="alert">
@@ -193,14 +194,20 @@ export async function DiscoveryScreen() {
       </section>
     </Shell>;
   }
+  const collections = collectionsPage?.published !== false ? parseCollections(collectionsPage?.body).filter((c) => c.published) : [];
+  const theme = themePage?.published !== false ? parseTheme(themePage?.body) : parseTheme(null);
   const categories = [...new Set([...data.items.map((activity) => activity.category), ...STANDARD_CATEGORIES])];
   return (
     <Shell actor={session?.actor} publicPage>
+      <div className={`storefront-preset-${theme.preset}`}>
+      {theme.announcement && (
+        <p className="announcement-bar" role="status">{theme.announcement}</p>
+      )}
       <section className="discovery-hero connected-hero">
         <div className="hero-copy">
-          <span className="eyebrow">{copy.heroEyebrow}</span>
-          <h1>{copy.heroTitle}</h1>
-          <p>{copy.heroText}</p>
+          <span className="eyebrow">{theme.heroEyebrow || copy.heroEyebrow}</span>
+          <h1>{theme.heroTitle || copy.heroTitle}</h1>
+          <p>{theme.heroText || copy.heroText}</p>
           <div className="card-actions">
             <Link className="btn" href="/parent/activities">
               {copy.exploreActivities}
@@ -233,7 +240,22 @@ export async function DiscoveryScreen() {
           <span>✦</span>
         </div>
       </section>
-      <Filters query={{}} copy={copy} categories={categories} />
+      </div>
+      <ExploreFilters query={{}} copy={copy} categories={categories} locale={locale} />
+      {collections.length > 0 && (
+        <section className="discovery-section" id="collections">
+          <h2>{locale === "ar" ? "مجموعات مختارة" : "Curated Collections"}</h2>
+          <div className="collection-grid">
+            {collections.map((c) => (
+              <Link key={c.id} href={collectionHref(c)} className={`collection-card tone-${c.tone}`}>
+                {c.badge && <span className="badge aqua">{c.badge}</span>}
+                <h3>{c.title}</h3>
+                {c.subtitle && <p>{c.subtitle}</p>}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="discovery-section" id="categories">
         <h2>{copy.exploreByCategory}</h2>
         <div className="category-grid">
@@ -310,21 +332,20 @@ export async function CatalogueScreen({
   const session = await identity();
   const data = await backend<Page<Activity>>(`/activities?${new URLSearchParams(query)}`,session?.token);
   const categories = [...new Set([...data.items.map((activity) => activity.category), ...STANDARD_CATEGORIES])];
-  const hasFilters = Boolean(query.q || query.age || query.area || query.category);
   return (
     <Shell actor={session?.actor} publicPage>
       <Title
         title={copy.exploreActivities}
         note={copy.catalogueNote}
       />
-      <Filters query={query} copy={copy} categories={categories} />
-      {hasFilters && (
-        <div className="card-actions" style={{ marginBottom: "16px" }}>
-          <Link className="btn outline small" href="/parent/activities">
-            {copy.clearFilters}
-          </Link>
-        </div>
-      )}
+      <ExploreFilters
+        query={query}
+        copy={copy}
+        categories={categories}
+        locale={locale}
+        totalCount={data.total}
+        showResultSummary={true}
+      />
       {data.items.length ? (
         <ActivityCards items={data.items} locale={locale} copy={copy} />
       ) : (
@@ -359,6 +380,11 @@ export async function ActivityScreen({ id }: { id: string }) {
         ← {copy.allActivitiesBack}
       </Link>
       <Title title={a.title} note={`${a.provider_name} · ${a.area}`} />
+      <div className="mobile-book-cta-bar">
+        <a className="btn" href="#booking-panel">
+          {session ? copy.request.title : (locale === "ar" ? "اطلب الحجز" : "Request to Book")} · {money(a.price_fils, locale)}
+        </a>
+      </div>
       <div className="detail-grid">
         <section>
           <Image

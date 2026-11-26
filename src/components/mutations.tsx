@@ -353,7 +353,7 @@ export function BookingRequest({
 
   if (!signedIn)
     return (
-      <aside className="panel booking-form">
+      <aside id="booking-panel" className="panel booking-form">
         <h2>{guestMode === "guest" ? (locale === "ar" ? "الحجز كضيف" : "Book as Guest") : copy.signInIntroTitle}</h2>
         <p className="record-meta">
           {copy.from} {money(activity.price_fils, locale)} {copy.perChild}
