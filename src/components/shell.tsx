@@ -8,6 +8,7 @@ import {
 import { SignOut } from "./account-controls";
 import { NotificationLink } from "./notification-controls";
 import { LanguageSwitcher } from "./language-switcher";
+import { MobileAccountMenu } from "./mobile-account-menu";
 import { serverDictionary } from "@/lib/server-locale";
 import type { Locale, ShellDictionary } from "@/lib/i18n";
 import type { Identity, Page } from "@/lib/types";
@@ -56,44 +57,60 @@ export function Header({
         <Link href="/#how-it-works">{dictionary.howItWorks}</Link>
       </nav>
       <div className="header-actions">
-        <LanguageSwitcher locale={locale} label={dictionary.language} />
+        <div className="desktop-header-controls">
+          <LanguageSwitcher locale={locale} label={dictionary.language} />
+          {actor ? (
+            <>
+              <nav
+                className="role-links"
+                aria-label={dictionary.workspaceNavigation}
+              >
+                <Link href="/parent">{dictionary.parent}</Link>
+                {actor.roles.includes("partner") && (
+                  <Link href="/partner">{dictionary.partner}</Link>
+                )}
+                {canUseAdminPath(actor, "/admin") && (
+                  <Link href={operatorHome(actor)}>{dictionary.superadmin}</Link>
+                )}
+              </nav>
+              <SignOut
+                locale={locale}
+                label={dictionary.signOut}
+                pendingLabel={dictionary.signingOut}
+              />
+            </>
+          ) : (
+            <>
+              <Link className="btn outline" href="/login">
+                {dictionary.signIn}
+              </Link>
+              <Link className="btn" href="/partner/apply">
+                {dictionary.becomePartner}
+              </Link>
+            </>
+          )}
+        </div>
         {actor ? (
-          <>
-            <nav
-              className="role-links"
-              aria-label={dictionary.workspaceNavigation}
-            >
-              <Link href="/parent">{dictionary.parent}</Link>
-              {actor.roles.includes("partner") && (
-                <Link href="/partner">{dictionary.partner}</Link>
-              )}
-              {canUseAdminPath(actor,"/admin") && (
-                <Link href={operatorHome(actor)}>{dictionary.superadmin}</Link>
-              )}
-            </nav>
-            <NotificationLink
-              key={actor.id}
-              href={`/${role}/notifications`}
-              label={dictionary.updates}
-              unavailableLabel={dictionary.updatesUnavailable}
-              retryLabel={dictionary.retry}
-            />
-            <SignOut
-              locale={locale}
-              label={dictionary.signOut}
-              pendingLabel={dictionary.signingOut}
-            />
-          </>
+          <NotificationLink
+            key={actor.id}
+            href={`/${role}/notifications`}
+            label={dictionary.updates}
+            unavailableLabel={dictionary.updatesUnavailable}
+            retryLabel={dictionary.retry}
+          />
         ) : (
-          <>
-            <Link className="btn outline" href="/login">
-              {dictionary.signIn}
-            </Link>
-            <Link className="btn" href="/partner/apply">
-              {dictionary.becomePartner}
-            </Link>
-          </>
+          <Link className="btn outline small mobile-signin-btn" href="/login">
+            {dictionary.signIn}
+          </Link>
         )}
+        <MobileAccountMenu
+          signedIn={Boolean(actor)}
+          locale={locale}
+          dictionary={dictionary}
+          canPartner={Boolean(actor?.roles.includes("partner"))}
+          canAdmin={Boolean(actor && canUseAdminPath(actor, "/admin"))}
+          adminHref={actor ? operatorHome(actor) : "/admin"}
+        />
       </div>
     </header>
   );
@@ -318,7 +335,6 @@ export async function Shell({
                   { label: dictionary.nav.allBookings, href: "/admin/bookings", icon: "calendar" },
                 ]
               : [
-                  { label: dictionary.nav.overview, href: "/parent", icon: "home" },
                   { label: dictionary.explore, href: "/parent/activities", icon: "search" },
                   { label: dictionary.nav.saved, href: "/parent/saved", icon: "heart" },
                   { label: dictionary.nav.bookings, href: "/parent/bookings", icon: "calendar" },

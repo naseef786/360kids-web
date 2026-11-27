@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Locale } from "@/lib/i18n";
 import type { ParentCopy } from "@/lib/parent-copy";
@@ -23,14 +23,15 @@ export function ExploreFilters({
   showResultSummary?: boolean;
 }) {
   const router = useRouter();
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [q, setQ] = useState(query.q ?? "");
-  const [age, setAge] = useState(query.age ?? "");
-  const [area, setArea] = useState(query.area ?? "");
-  const [category, setCategory] = useState(query.category ?? "");
+  const [draftAge, setDraftAge] = useState(query.age ?? "");
+  const [draftArea, setDraftArea] = useState(query.area ?? "");
+  const [draftCategory, setDraftCategory] = useState(query.category ?? "");
 
   const allCategories = [
-    ...new Set([...categories, ...(category ? [category] : [])]),
+    ...new Set([...categories, ...(query.category ? [query.category] : [])]),
   ];
 
   const activeFilters: Array<{ key: string; label: string; clear: () => void }> = [];
@@ -39,12 +40,39 @@ export function ExploreFilters({
   if (query.area) activeFilters.push({ key: "area", label: `${copy.area}: ${query.area}`, clear: () => applyFilters({ area: "" }) });
   if (query.category) activeFilters.push({ key: "category", label: `${copy.category}: ${query.category}`, clear: () => applyFilters({ category: "" }) });
 
+  useEffect(() => {
+    if (!sheetOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSheetOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [sheetOpen]);
+
+  function openSheet() {
+    setDraftAge(query.age ?? "");
+    setDraftArea(query.area ?? "");
+    setDraftCategory(query.category ?? "");
+    setSheetOpen(true);
+  }
+
+  function cancelSheet() {
+    setDraftAge(query.age ?? "");
+    setDraftArea(query.area ?? "");
+    setDraftCategory(query.category ?? "");
+    setSheetOpen(false);
+    triggerRef.current?.focus();
+  }
+
   function applyFilters(overrides?: Partial<{ q: string; age: string; area: string; category: string }>) {
     const next = {
       q: overrides?.q !== undefined ? overrides.q : q,
-      age: overrides?.age !== undefined ? overrides.age : age,
-      area: overrides?.area !== undefined ? overrides.area : area,
-      category: overrides?.category !== undefined ? overrides.category : category,
+      age: overrides?.age !== undefined ? overrides.age : draftAge,
+      area: overrides?.area !== undefined ? overrides.area : draftArea,
+      category: overrides?.category !== undefined ? overrides.category : draftCategory,
     };
     const params = new URLSearchParams();
     if (next.q.trim()) params.set("q", next.q.trim());
@@ -58,14 +86,18 @@ export function ExploreFilters({
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    applyFilters();
+    applyFilters({
+      age: query.age ?? "",
+      area: query.area ?? "",
+      category: query.category ?? "",
+    });
   }
 
-  function resetAll() {
+  function clearAll() {
     setQ("");
-    setAge("");
-    setArea("");
-    setCategory("");
+    setDraftAge("");
+    setDraftArea("");
+    setDraftCategory("");
     setSheetOpen(false);
     router.push(actionPath);
   }
@@ -73,19 +105,20 @@ export function ExploreFilters({
   return (
     <section className="explore-filter-wrap" aria-label={copy.exploreActivities}>
       <form className="panel live-filters" onSubmit={handleSubmit} action={actionPath}>
-        <label>
-          {copy.activity}
+        <label className="search-input-field">
+          <span className="filter-field-label">{copy.activity}</span>
           <input
             name="q"
             type="search"
+            aria-label={copy.activity}
             placeholder={copy.searchPlaceholder}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
         </label>
         <label className="desktop-filter-field">
-          {copy.childAge}
-          <select name="age" value={age} onChange={(e) => setAge(e.target.value)}>
+          <span className="filter-field-label">{copy.childAge}</span>
+          <select name="age" value={draftAge} onChange={(e) => setDraftAge(e.target.value)}>
             <option value="">{copy.allAges}</option>
             {Array.from({ length: 18 }, (_, i) => (
               <option key={i} value={String(i)}>
@@ -95,18 +128,18 @@ export function ExploreFilters({
           </select>
         </label>
         <label className="desktop-filter-field">
-          {copy.area}
+          <span className="filter-field-label">{copy.area}</span>
           <input
             name="area"
             placeholder={copy.areaPlaceholder}
-            value={area}
-            onChange={(e) => setArea(e.target.value)}
+            value={draftArea}
+            onChange={(e) => setDraftArea(e.target.value)}
           />
         </label>
-        {(allCategories.length > 0 || category) && (
+        {(allCategories.length > 0 || draftCategory) && (
           <label className="desktop-filter-field">
-            {copy.category}
-            <select name="category" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <span className="filter-field-label">{copy.category}</span>
+            <select name="category" value={draftCategory} onChange={(e) => setDraftCategory(e.target.value)}>
               <option value="">{copy.allActivities}</option>
               {allCategories.map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -115,19 +148,20 @@ export function ExploreFilters({
           </label>
         )}
         <div className="filter-submit-row">
+          <button type="submit" className="btn small">
+            {locale === "ar" ? "بحث" : "Search"}
+          </button>
           <button
+            ref={triggerRef}
             type="button"
-            className="btn outline mobile-filter-trigger"
-            onClick={() => setSheetOpen(true)}
+            className="btn outline small mobile-filter-trigger"
+            onClick={openSheet}
             aria-expanded={sheetOpen}
           >
             {locale === "ar" ? "تصفية" : "Filters"}
             {activeFilters.length > 0 && (
               <span className="filter-count-pill">{activeFilters.length}</span>
             )}
-          </button>
-          <button type="submit" className="btn">
-            {copy.exploreActivities}
           </button>
         </div>
       </form>
@@ -159,7 +193,7 @@ export function ExploreFilters({
               <button
                 type="button"
                 className="text-link small"
-                onClick={resetAll}
+                onClick={clearAll}
               >
                 {copy.clearFilters}
               </button>
@@ -175,7 +209,7 @@ export function ExploreFilters({
           aria-modal="true"
           aria-label={locale === "ar" ? "تصفية الأنشطة" : "Filter programmes"}
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSheetOpen(false);
+            if (e.target === e.currentTarget) cancelSheet();
           }}
         >
           <div className="filter-sheet">
@@ -184,15 +218,15 @@ export function ExploreFilters({
               <button
                 type="button"
                 className="btn outline small"
-                onClick={() => setSheetOpen(false)}
+                onClick={cancelSheet}
               >
-                {locale === "ar" ? "إغلاق" : "Close"}
+                {locale === "ar" ? "إلغاء" : "Cancel"}
               </button>
             </div>
             <div className="form-stack">
               <label>
                 {copy.childAge}
-                <select value={age} onChange={(e) => setAge(e.target.value)}>
+                <select value={draftAge} onChange={(e) => setDraftAge(e.target.value)}>
                   <option value="">{copy.allAges}</option>
                   {Array.from({ length: 18 }, (_, i) => (
                     <option key={i} value={String(i)}>
@@ -205,14 +239,14 @@ export function ExploreFilters({
                 {copy.area}
                 <input
                   placeholder={copy.areaPlaceholder}
-                  value={area}
-                  onChange={(e) => setArea(e.target.value)}
+                  value={draftArea}
+                  onChange={(e) => setDraftArea(e.target.value)}
                 />
               </label>
               {allCategories.length > 0 && (
                 <label>
                   {copy.category}
-                  <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <select value={draftCategory} onChange={(e) => setDraftCategory(e.target.value)}>
                     <option value="">{copy.allActivities}</option>
                     {allCategories.map((c) => (
                       <option key={c} value={c}>{c}</option>
@@ -224,7 +258,7 @@ export function ExploreFilters({
                 <button
                   type="button"
                   className="btn outline"
-                  onClick={resetAll}
+                  onClick={clearAll}
                 >
                   {copy.clearFilters}
                 </button>

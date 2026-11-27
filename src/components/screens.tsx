@@ -331,14 +331,33 @@ export async function CatalogueScreen({
   const copy = parentCopy[locale];
   const query = await pageQuery(searchParams, ["q","age","area","category"]);
   const session = await identity();
-  const data = await backend<Page<Activity>>(`/activities?${new URLSearchParams(query)}`,session?.token);
+  let data: Page<Activity>;
+  try {
+    data = await backend<Page<Activity>>(`/activities?${new URLSearchParams(query)}`, session?.token);
+  } catch {
+    return (
+      <Shell actor={session?.actor} publicPage>
+        <Title title={copy.exploreActivities} />
+        <section className="panel stack" role="alert">
+          <h2>{locale === "ar" ? "تعذّر تحميل الأنشطة" : "Couldn’t load activities"}</h2>
+          <p className="record-meta">
+            {locale === "ar"
+              ? "حدث خطأ أثناء الاتصال بالخادم. يُرجى إعادة المحاولة."
+              : "Something went wrong while loading programmes. Please try again."}
+          </p>
+          <div className="card-actions">
+            <Link className="btn small" href="/parent/activities">
+              {locale === "ar" ? "إعادة المحاولة" : "Retry"}
+            </Link>
+          </div>
+        </section>
+      </Shell>
+    );
+  }
   const categories = [...new Set([...data.items.map((activity) => activity.category), ...STANDARD_CATEGORIES])];
   return (
     <Shell actor={session?.actor} publicPage>
-      <Title
-        title={copy.exploreActivities}
-        note={copy.catalogueNote}
-      />
+      <Title title={copy.exploreActivities} />
       <ExploreFilters
         query={query}
         copy={copy}
@@ -852,6 +871,7 @@ export async function ProfilesScreen({
 }: {
   searchParams: Search;
 }) {
+  const { locale } = await serverDictionary();
   const { actor, token } = await requireIdentity("/parent/profile"),
     query = await pageQuery(searchParams),
     data = await backend<Page<Child>>(
@@ -861,8 +881,13 @@ export async function ProfilesScreen({
   return (
     <Shell actor={actor}>
       <Title
-        title="Children & account"
-        note="A little information helps us find the right fit."
+        title={locale === "ar" ? "الأطفال والحساب" : "Children & account"}
+        note={locale === "ar" ? "معلومات بسيطة تساعدنا في اقتراح الأنشطة المناسبة." : "A little information helps us find the right fit."}
+        action={
+          <Link className="btn outline small" href="/parent">
+            {locale === "ar" ? "نظرة عامة على العائلة" : "Family Overview"}
+          </Link>
+        }
       />
       <div className="panel">
         <h2>Your account</h2>
